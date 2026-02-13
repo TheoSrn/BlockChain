@@ -107,7 +107,6 @@ export function KYCStatusDisplay() {
           }
           label="KYC Verification"
           status={kycStatus.isKYCVerified ? 'Verified' : 'Not Verified'}
-          level={kycStatus.kycLevel > 0 ? `Level ${kycStatus.kycLevel}` : undefined}
           isPositive={kycStatus.isKYCVerified}
         />
 

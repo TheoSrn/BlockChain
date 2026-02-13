@@ -5,14 +5,21 @@
  */
 
 import { useState } from 'react';
-import { useAccount } from 'wagmi';
+import { useAccount, useWaitForTransactionReceipt, useWriteContract } from 'wagmi';
 import { useCompliance } from '@/hooks/web3/useCompliance';
 import { useRouter } from 'next/navigation';
+import { parseUnits } from 'viem';
+import FACTORY_ABI from '@/abi/Factory';
+import { CONTRACT_ADDRESSES } from '@/config/contracts';
 
 export default function NewTokenizePage() {
   const router = useRouter();
-  const { isConnected } = useAccount();
+  const { isConnected, address } = useAccount();
   const { compliance } = useCompliance();
+  const { writeContract, data: txHash, isPending, error } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+    hash: txHash,
+  });
   const [formData, setFormData] = useState({
     name: '',
     symbol: '',
@@ -38,8 +45,38 @@ export default function NewTokenizePage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Logic handled by services/contracts
-    alert('Asset tokenization would be sent to smart contract');
+    if (!canTokenize || !address) return;
+
+    const factoryAddress = CONTRACT_ADDRESSES.ASSET_FACTORY as `0x${string}`;
+    if (!factoryAddress || factoryAddress === '0x0000000000000000000000000000000000000000') {
+      alert('Factory address is not configured');
+      return;
+    }
+
+    if (!formData.name || !formData.symbol || !formData.totalSupply || !formData.valueUSD) {
+      alert('Please fill all required fields');
+      return;
+    }
+
+    writeContract({
+      address: factoryAddress,
+      abi: FACTORY_ABI,
+      functionName: 'createAsset',
+      args: [
+        formData.name,
+        formData.symbol.toUpperCase(),
+        `${formData.name} NFT`,
+        `${formData.symbol.toUpperCase()}NFT`,
+        address,
+        parseUnits(formData.totalSupply, 18),
+        formData.assetType || 'UNKNOWN',
+        BigInt(0),
+        BigInt(formData.valueUSD || '0'),
+        formData.description || '',
+        '',
+        '',
+      ],
+    });
   };
 
   return (
@@ -189,22 +226,46 @@ export default function NewTokenizePage() {
             {/* Warning */}
             <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-4">
               <p className="text-sm text-yellow-400">
-                ⚠️ This is a demo form. In production, this would deploy a new
-                ERC20 contract and register it on-chain.
+                ⚠️ This creates an on-chain asset using the Factory. You must have the
+                Factory admin role for the transaction to succeed.
               </p>
             </div>
+
+            {txHash ? (
+              <div className="rounded-lg border border-blue-500/50 bg-blue-500/10 p-4">
+                <p className="text-sm text-blue-400">
+                  Transaction: {txHash.slice(0, 10)}...{txHash.slice(-8)}
+                </p>
+              </div>
+            ) : null}
+
+            {isSuccess ? (
+              <div className="rounded-lg border border-green-500/50 bg-green-500/10 p-4">
+                <p className="text-sm text-green-400">
+                  ✅ Asset created successfully.
+                </p>
+              </div>
+            ) : null}
+
+            {error ? (
+              <div className="rounded-lg border border-red-500/50 bg-red-500/10 p-4">
+                <p className="text-sm text-red-400">
+                  Error: {error.message}
+                </p>
+              </div>
+            ) : null}
 
             {/* Submit */}
             <button
               type="submit"
-              disabled={!canTokenize}
+              disabled={!canTokenize || isPending || isConfirming}
               className={`w-full rounded-lg py-3 font-semibold transition-colors ${
-                canTokenize
+                canTokenize && !isPending && !isConfirming
                   ? 'bg-purple-600 text-white hover:bg-purple-700'
                   : 'cursor-not-allowed bg-gray-700 text-gray-400'
               }`}
             >
-              {canTokenize ? 'Create Token' : 'Complete KYC to Tokenize'}
+              {isPending || isConfirming ? 'Submitting...' : canTokenize ? 'Create Token' : 'Complete KYC to Tokenize'}
             </button>
           </form>
         </div>

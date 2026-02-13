@@ -6,39 +6,15 @@
 import { useAccount, useReadContract } from 'wagmi';
 import { CONTRACT_ADDRESSES } from '@/config/contracts';
 import type { ComplianceCheck } from '@/types';
-
-// ABI minimal pour le KYC Manager (à remplacer par votre ABI complet)
-const KYC_MANAGER_ABI = [
-  {
-    inputs: [{ name: 'user', type: 'address' }],
-    name: 'isKYCVerified',
-    outputs: [{ name: '', type: 'bool' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [{ name: 'user', type: 'address' }],
-    name: 'isWhitelisted',
-    outputs: [{ name: '', type: 'bool' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [{ name: 'user', type: 'address' }],
-    name: 'isBlacklisted',
-    outputs: [{ name: '', type: 'bool' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-] as const;
+import KYC_MANAGER_ABI from '@/abi/KYCManager';
 
 export function useCompliance() {
   const { address } = useAccount();
 
-  const { data: isKYCVerified, isLoading: kycLoading } = useReadContract({
+  const { data: isVerified, isLoading: kycLoading } = useReadContract({
     address: CONTRACT_ADDRESSES.KYC_MANAGER as `0x${string}`,
     abi: KYC_MANAGER_ABI,
-    functionName: 'isKYCVerified',
+    functionName: 'isVerified',
     args: address ? [address] : undefined,
     query: {
       enabled: !!address,
@@ -70,8 +46,8 @@ export function useCompliance() {
   const complianceCheck: ComplianceCheck | null = address
     ? {
         address,
-        canTrade: !!(isKYCVerified && isWhitelisted && !isBlacklisted),
-        reason: !isKYCVerified
+        canTrade: !!(isVerified && isWhitelisted && !isBlacklisted),
+        reason: !isVerified
           ? 'KYC verification required'
           : isBlacklisted
           ? 'Address is blacklisted'
@@ -79,7 +55,7 @@ export function useCompliance() {
           ? 'Address not whitelisted'
           : undefined,
         restrictions: [
-          !isKYCVerified && 'NO_KYC',
+          !isVerified && 'NO_KYC',
           isBlacklisted && 'BLACKLISTED',
           !isWhitelisted && 'NOT_WHITELISTED',
         ].filter(Boolean) as string[],
@@ -89,7 +65,7 @@ export function useCompliance() {
   return {
     compliance: complianceCheck,
     isLoading,
-    isKYCVerified: !!isKYCVerified,
+    isKYCVerified: !!isVerified,
     isWhitelisted: !!isWhitelisted,
     isBlacklisted: !!isBlacklisted,
   };

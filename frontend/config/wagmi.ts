@@ -5,20 +5,23 @@
 
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { http } from 'viem';
-import { sepolia, mainnet, polygon, optimism, arbitrum } from 'wagmi/chains';
+import { sepolia, mainnet, polygon, optimism, arbitrum, hardhat } from 'wagmi/chains';
+
+const chainId = Number(process.env.NEXT_PUBLIC_CHAIN_ID || '31337');
+
+const enabledChains = (() => {
+  if (chainId === 11155111) return [sepolia];
+  if (chainId === 31337) return [hardhat];
+  return [sepolia, mainnet, polygon, optimism, arbitrum];
+})();
 
 // Configuration par défaut de RainbowKit avec wagmi
 export const config = getDefaultConfig({
   appName: 'Tokenized Asset Management Platform',
   projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'YOUR_PROJECT_ID', // WalletConnect Cloud Project ID
-  chains: [
-    sepolia, // Testnet Ethereum
-    mainnet,
-    polygon,
-    optimism,
-    arbitrum,
-  ],
+  chains: enabledChains,
   transports: {
+    [hardhat.id]: http(process.env.NEXT_PUBLIC_LOCAL_RPC_URL || 'http://127.0.0.1:8545'),
     [sepolia.id]: http(process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL || 'https://rpc.sepolia.org'),
     [mainnet.id]: http(process.env.NEXT_PUBLIC_MAINNET_RPC_URL || 'https://eth.llamarpc.com'),
     [polygon.id]: http('https://polygon-rpc.com'),

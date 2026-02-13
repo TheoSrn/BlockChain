@@ -3,69 +3,93 @@
  * Récupère l'état réel on-chain sans mocking
  */
 
-import { useReadContract } from 'wagmi';
+import { useReadContract, useReadContracts } from 'wagmi';
 import { CONTRACT_ADDRESSES } from '@/config/contracts';
-import type { TokenizedAsset } from '@/types';
+import FACTORY_ABI from '@/abi/Factory';
 
-// ABI minimal pour l'Asset Registry (à remplacer par votre ABI complet)
-const ASSET_REGISTRY_ABI = [
-  {
-    inputs: [],
-    name: 'getAllAssets',
-    outputs: [{ name: '', type: 'address[]' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [{ name: 'assetAddress', type: 'address' }],
-    name: 'getAssetInfo',
-    outputs: [
-      { name: 'name', type: 'string' },
-      { name: 'symbol', type: 'string' },
-      { name: 'totalSupply', type: 'uint256' },
-      { name: 'valueUSD', type: 'uint256' },
-      { name: 'isActive', type: 'bool' },
-    ],
-    stateMutability: 'view',
-    type: 'function',
-  },
-] as const;
-
-export function useAssets() {
-  const { data: assetAddresses, isLoading: addressesLoading } = useReadContract({
-    address: CONTRACT_ADDRESSES.ASSET_REGISTRY as `0x${string}`,
-    abi: ASSET_REGISTRY_ABI,
-    functionName: 'getAllAssets',
-  });
-
-  return {
-    assetAddresses: (assetAddresses as string[]) || [],
-    isLoading: addressesLoading,
-  };
+export interface AssetRecord {
+  id: bigint;
+  nft: string;
+  token: string;
+  pool: string;
+  name: string;
+  symbol: string;
+  active: boolean;
 }
 
-export function useAssetInfo(assetAddress: string | undefined) {
-  const { data, isLoading, error } = useReadContract({
-    address: CONTRACT_ADDRESSES.ASSET_REGISTRY as `0x${string}`,
-    abi: ASSET_REGISTRY_ABI,
-    functionName: 'getAssetInfo',
-    args: assetAddress ? [assetAddress as `0x${string}`] : undefined,
+export function useAssets() {
+  const factoryAddress = CONTRACT_ADDRESSES.ASSET_FACTORY as `0x${string}`;
+  const hasFactory = factoryAddress !== '0x0000000000000000000000000000000000000000';
+
+  const { data: assetCountData, isLoading: countLoading } = useReadContract({
+    address: factoryAddress,
+    abi: FACTORY_ABI,
+    functionName: 'assetCount',
     query: {
-      enabled: !!assetAddress,
+      enabled: hasFactory,
     },
   });
 
-  const assetInfo: TokenizedAsset | null = data
+  const assetCount = Number(assetCountData ?? 0n);
+  const assetIds = Array.from({ length: assetCount }, (_, i) => BigInt(i + 1));
+
+  const { data: assetsData, isLoading: assetsLoading } = useReadContracts({
+    contracts: assetIds.map((id) => ({
+      address: factoryAddress,
+      abi: FACTORY_ABI,
+      functionName: 'getAsset',
+      args: [id],
+    })),
+    query: {
+      enabled: hasFactory && assetCount > 0,
+    },
+  });
+
+  const assets = (assetsData || [])
+    .map((result) => {
+      if (result.status !== 'success') return null;
+      const [id, nft, token, pool, name, symbol, active] = result.result as unknown as [
+        bigint,
+        string,
+        string,
+        string,
+        string,
+        string,
+        boolean
+      ];
+      return { id, nft, token, pool, name, symbol, active } as AssetRecord;
+    })
+    .filter(Boolean) as AssetRecord[];
+
+  return {
+    assets,
+    isLoading: countLoading || assetsLoading,
+  };
+}
+
+export function useAssetInfo(assetId: bigint | number | undefined) {
+  const factoryAddress = CONTRACT_ADDRESSES.ASSET_FACTORY as `0x${string}`;
+  const hasFactory = factoryAddress !== '0x0000000000000000000000000000000000000000';
+
+  const { data, isLoading, error } = useReadContract({
+    address: factoryAddress,
+    abi: FACTORY_ABI,
+    functionName: 'getAsset',
+    args: assetId !== undefined ? [BigInt(assetId)] : undefined,
+    query: {
+      enabled: hasFactory && assetId !== undefined,
+    },
+  });
+
+  const assetInfo: AssetRecord | null = data
     ? {
-        address: assetAddress!,
-        name: (data as any)[0],
-        symbol: (data as any)[1],
-        totalSupply: (data as any)[2],
-        valueUSD: (data as any)[3],
-        isActive: (data as any)[4],
-        assetType: 'OTHER',
-        complianceRequired: true,
-        createdAt: 0,
+        id: (data as any)[0],
+        nft: (data as any)[1],
+        token: (data as any)[2],
+        pool: (data as any)[3],
+        name: (data as any)[4],
+        symbol: (data as any)[5],
+        active: (data as any)[6],
       }
     : null;
 

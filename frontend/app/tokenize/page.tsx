@@ -1,15 +1,15 @@
 'use client';
 
 /**
- * Page Tokenize - Mint de tokens ERC20 et NFTs ERC721
- * Avec onglets Fungible Assets et NFT Assets
+ * Page Tokenize - Mint de tokens ERC20 et creation d'actifs via la Factory
  */
 
-import { useState } from 'react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
+import { useEffect, useState } from 'react';
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { useKYCStatus } from '@/hooks/web3/useKYCStatus';
-import { CONTRACT_ADDRESSES } from '@/config/contracts';
+import { CONTRACT_ADDRESSES, DEFAULT_ASSET_ID } from '@/config/contracts';
 import { parseUnits, formatUnits } from 'viem';
+import FACTORY_ABI from '@/abi/Factory';
 
 // ERC20 ABI minimal
 const ERC20_ABI = [
@@ -19,7 +19,7 @@ const ERC20_ABI = [
       { name: 'amount', type: 'uint256' },
     ],
     name: 'mint',
-    outputs: [{ name: '', type: 'bool' }],
+    outputs: [],
     stateMutability: 'nonpayable',
     type: 'function',
   },
@@ -39,26 +39,7 @@ const ERC20_ABI = [
   },
 ] as const;
 
-// ERC721 ABI minimal
-const ERC721_ABI = [
-  {
-    inputs: [
-      { name: 'to', type: 'address' },
-      { name: 'tokenURI', type: 'string' },
-    ],
-    name: 'mint',
-    outputs: [{ name: '', type: 'uint256' }],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    inputs: [],
-    name: 'totalSupply',
-    outputs: [{ name: '', type: 'uint256' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-] as const;
+const FACTORY_CREATE_ABI = FACTORY_ABI;
 
 type Tab = 'erc20' | 'erc721';
 
@@ -78,26 +59,23 @@ export default function TokenizePage() {
     );
   }
 
-  // 🚀 MODE TEST : Force canTokenize à true pour tester l'interface
-  const canTokenize = true; // kycStatus?.canTrade ?? false;
+  const canTokenize = kycStatus?.canTrade ?? false;
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* Header */}
       <div className="mb-8">
         <h1 className="text-4xl font-bold mb-2">Tokenize Assets</h1>
-        <p className="text-gray-600">Mint fungible tokens (ERC20) or NFTs (ERC721)</p>
+        <p className="text-gray-600">Mint fungible tokens (ERC20) or create assets with the Factory</p>
       </div>
 
-      {/* KYC Warning */}
       {!canTokenize && (
         <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-6">
           <div className="flex items-start gap-3">
-            <span className="text-2xl">⚠️</span>
+            <span className="text-2xl">!</span>
             <div className="flex-1">
               <h3 className="font-bold text-red-800 mb-2">KYC Verification Required</h3>
               <p className="text-red-700 text-sm mb-3">
-                You need to complete KYC verification before minting tokens.
+                You need to complete KYC verification before minting or creating assets.
               </p>
               <a
                 href="/kyc"
@@ -110,7 +88,6 @@ export default function TokenizePage() {
         </div>
       )}
 
-      {/* Tabs */}
       <div className="border-b border-gray-200 mb-6">
         <div className="flex gap-4">
           <button
@@ -131,16 +108,15 @@ export default function TokenizePage() {
                 : 'border-transparent text-gray-600 hover:text-gray-800'
             }`}
           >
-            NFT Assets (ERC721)
+            Create Asset (Factory)
           </button>
         </div>
       </div>
 
-      {/* Tab Content */}
       {activeTab === 'erc20' ? (
         <ERC20Tab canTokenize={canTokenize} userAddress={address!} />
       ) : (
-        <ERC721Tab canTokenize={canTokenize} userAddress={address!} />
+        <CreateAssetTab canTokenize={canTokenize} userAddress={address!} />
       )}
     </div>
   );
@@ -151,7 +127,28 @@ function ERC20Tab({ canTokenize, userAddress }: { canTokenize: boolean; userAddr
   const [mintAmount, setMintAmount] = useState('');
   const [selectedToken, setSelectedToken] = useState(CONTRACT_ADDRESSES.USDC);
 
-  // Lire la supply totale
+  const factoryAddress = CONTRACT_ADDRESSES.ASSET_FACTORY as `0x${string}`;
+  const hasFactory = factoryAddress !== '0x0000000000000000000000000000000000000000';
+
+  const { data: assetRecord } = useReadContract({
+    address: factoryAddress,
+    abi: FACTORY_CREATE_ABI,
+    functionName: 'getAsset',
+    args: [BigInt(DEFAULT_ASSET_ID)],
+    query: {
+      enabled: hasFactory,
+      refetchInterval: 10_000,
+    },
+  });
+
+  const assetTokenAddress = assetRecord ? (assetRecord as any[])[2] as string : undefined;
+
+  useEffect(() => {
+    if (assetTokenAddress && assetTokenAddress !== selectedToken) {
+      setSelectedToken(assetTokenAddress);
+    }
+  }, [assetTokenAddress, selectedToken]);
+
   const { data: totalSupply, isLoading: isLoadingSupply } = useReadContract({
     address: selectedToken as `0x${string}`,
     abi: ERC20_ABI,
@@ -170,10 +167,7 @@ function ERC20Tab({ canTokenize, userAddress }: { canTokenize: boolean; userAddr
     },
   });
 
-  // WriteContract pour mint
   const { writeContract, data: hash, isPending, error } = useWriteContract();
-
-  // Attendre la transaction
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
@@ -190,7 +184,7 @@ function ERC20Tab({ canTokenize, userAddress }: { canTokenize: boolean; userAddr
     }
 
     try {
-      const amount = parseUnits(mintAmount, decimals as number || 18);
+      const amount = parseUnits(mintAmount, (decimals as number) || 18);
 
       writeContract({
         address: selectedToken as `0x${string}`,
@@ -205,12 +199,11 @@ function ERC20Tab({ canTokenize, userAddress }: { canTokenize: boolean; userAddr
   };
 
   const formattedSupply = totalSupply
-    ? formatUnits(totalSupply as bigint, decimals as number || 18)
+    ? formatUnits(totalSupply as bigint, (decimals as number) || 18)
     : '0';
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
-      {/* Mint Section */}
       <div className="bg-white border rounded-lg p-6">
         <h2 className="text-2xl font-bold mb-4">Mint Fungible Tokens</h2>
 
@@ -222,6 +215,9 @@ function ERC20Tab({ canTokenize, userAddress }: { canTokenize: boolean; userAddr
               onChange={(e) => setSelectedToken(e.target.value)}
               className="w-full border rounded-lg px-4 py-2"
             >
+              {assetTokenAddress && assetTokenAddress !== '0x0000000000000000000000000000000000000000' && (
+                <option value={assetTokenAddress}>Asset Token (Factory)</option>
+              )}
               <option value={CONTRACT_ADDRESSES.USDC}>USDC (Testnet)</option>
               <option value={CONTRACT_ADDRESSES.USDT}>USDT (Testnet)</option>
             </select>
@@ -254,7 +250,6 @@ function ERC20Tab({ canTokenize, userAddress }: { canTokenize: boolean; userAddr
             {isPending ? 'Waiting for approval...' : isConfirming ? 'Confirming...' : 'Mint Tokens'}
           </button>
 
-          {/* Transaction Status */}
           {hash && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
               <p className="text-sm text-blue-800">
@@ -265,19 +260,18 @@ function ERC20Tab({ canTokenize, userAddress }: { canTokenize: boolean; userAddr
 
           {isSuccess && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-              <p className="text-sm text-green-800 font-semibold">✅ Tokens minted successfully!</p>
+              <p className="text-sm text-green-800 font-semibold">Tokens minted successfully.</p>
             </div>
           )}
 
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-              <p className="text-sm text-red-800">❌ {error.message}</p>
+              <p className="text-sm text-red-800">Error: {error.message}</p>
             </div>
           )}
         </div>
       </div>
 
-      {/* Supply Info */}
       <div className="bg-white border rounded-lg p-6">
         <h2 className="text-2xl font-bold mb-4">Total Supply</h2>
 
@@ -307,7 +301,7 @@ function ERC20Tab({ canTokenize, userAddress }: { canTokenize: boolean; userAddr
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <p className="text-sm text-blue-800">
-                <strong>Note:</strong> Minting requires appropriate permissions on the contract.
+                <strong>Note:</strong> Minting requires ADMIN_ROLE on the token contract.
               </p>
             </div>
           </div>
@@ -317,94 +311,207 @@ function ERC20Tab({ canTokenize, userAddress }: { canTokenize: boolean; userAddr
   );
 }
 
-// ===== ERC721 Tab =====
-function ERC721Tab({ canTokenize, userAddress }: { canTokenize: boolean; userAddress: string }) {
-  const [tokenURI, setTokenURI] = useState('');
+// ===== Create Asset Tab =====
+function CreateAssetTab({ canTokenize, userAddress }: { canTokenize: boolean; userAddress: string }) {
+  const [tokenName, setTokenName] = useState('');
+  const [tokenSymbol, setTokenSymbol] = useState('');
   const [nftName, setNftName] = useState('');
-  const contractAddress = CONTRACT_ADDRESSES.ASSET_REGISTRY;
+  const [nftSymbol, setNftSymbol] = useState('');
+  const [treasury, setTreasury] = useState(userAddress);
+  const [initialSupply, setInitialSupply] = useState('1000000');
+  const [location, setLocation] = useState('');
+  const [surface, setSurface] = useState('');
+  const [estimatedValue, setEstimatedValue] = useState('');
+  const [description, setDescription] = useState('');
+  const [documents, setDocuments] = useState('');
+  const [tokenUri, setTokenUri] = useState('');
 
-  // Lire le total supply de NFTs
-  const { data: totalSupply, isLoading: isLoadingSupply } = useReadContract({
-    address: contractAddress as `0x${string}`,
-    abi: ERC721_ABI,
-    functionName: 'totalSupply',
-    query: {
-      enabled: !!contractAddress && contractAddress !== '0x0000000000000000000000000000000000000000',
-    },
-  });
-
-  // WriteContract pour mint NFT
+  const factoryAddress = CONTRACT_ADDRESSES.ASSET_FACTORY;
   const { writeContract, data: hash, isPending, error } = useWriteContract();
-
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
 
-  const handleMintNFT = () => {
+  const handleCreateAsset = () => {
     if (!canTokenize) {
       alert('Please complete KYC verification first');
       return;
     }
 
-    if (!tokenURI) {
-      alert('Please enter a token URI');
+    if (!factoryAddress || factoryAddress === '0x0000000000000000000000000000000000000000') {
+      alert('Factory address is not configured');
+      return;
+    }
+
+    if (!tokenName || !tokenSymbol || !nftName || !nftSymbol) {
+      alert('Please fill token and NFT names/symbols');
       return;
     }
 
     try {
       writeContract({
-        address: contractAddress as `0x${string}`,
-        abi: ERC721_ABI,
-        functionName: 'mint',
-        args: [userAddress as `0x${string}`, tokenURI],
+        address: factoryAddress as `0x${string}`,
+        abi: FACTORY_CREATE_ABI,
+        functionName: 'createAsset',
+        args: [
+          tokenName,
+          tokenSymbol,
+          nftName,
+          nftSymbol,
+          treasury as `0x${string}`,
+          parseUnits(initialSupply || '0', 18),
+          location,
+          BigInt(surface || '0'),
+          BigInt(estimatedValue || '0'),
+          description,
+          documents,
+          tokenUri,
+        ],
       });
     } catch (err) {
-      console.error('Error minting NFT:', err);
+      console.error('Error creating asset:', err);
       alert(`Error: ${(err as Error).message}`);
     }
   };
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
-      {/* Mint NFT Section */}
       <div className="bg-white border rounded-lg p-6">
-        <h2 className="text-2xl font-bold mb-4">Mint NFT</h2>
+        <h2 className="text-2xl font-bold mb-4">Create New Asset</h2>
 
         <div className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="block text-gray-700 mb-2 font-semibold">Token Name</label>
+              <input
+                type="text"
+                value={tokenName}
+                onChange={(e) => setTokenName(e.target.value)}
+                placeholder="Paris Share"
+                className="w-full border rounded-lg px-4 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2 font-semibold">Token Symbol</label>
+              <input
+                type="text"
+                value={tokenSymbol}
+                onChange={(e) => setTokenSymbol(e.target.value)}
+                placeholder="PARIS"
+                className="w-full border rounded-lg px-4 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2 font-semibold">NFT Name</label>
+              <input
+                type="text"
+                value={nftName}
+                onChange={(e) => setNftName(e.target.value)}
+                placeholder="Paris Building"
+                className="w-full border rounded-lg px-4 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2 font-semibold">NFT Symbol</label>
+              <input
+                type="text"
+                value={nftSymbol}
+                onChange={(e) => setNftSymbol(e.target.value)}
+                placeholder="PARISNFT"
+                className="w-full border rounded-lg px-4 py-2"
+              />
+            </div>
+          </div>
+
           <div>
-            <label className="block text-gray-700 mb-2 font-semibold">NFT Name</label>
+            <label className="block text-gray-700 mb-2 font-semibold">Treasury Address</label>
             <input
               type="text"
-              value={nftName}
-              onChange={(e) => setNftName(e.target.value)}
-              placeholder="My Tokenized Asset"
+              value={treasury}
+              onChange={(e) => setTreasury(e.target.value)}
+              placeholder={userAddress}
+              className="w-full border rounded-lg px-4 py-2"
+            />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="block text-gray-700 mb-2 font-semibold">Initial Supply</label>
+              <input
+                type="number"
+                value={initialSupply}
+                onChange={(e) => setInitialSupply(e.target.value)}
+                placeholder="1000000"
+                className="w-full border rounded-lg px-4 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2 font-semibold">Surface (sqm)</label>
+              <input
+                type="number"
+                value={surface}
+                onChange={(e) => setSurface(e.target.value)}
+                placeholder="1200"
+                className="w-full border rounded-lg px-4 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2 font-semibold">Estimated Value</label>
+              <input
+                type="number"
+                value={estimatedValue}
+                onChange={(e) => setEstimatedValue(e.target.value)}
+                placeholder="2500000"
+                className="w-full border rounded-lg px-4 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-2 font-semibold">Location</label>
+              <input
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="Paris, France"
+                className="w-full border rounded-lg px-4 py-2"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-gray-700 mb-2 font-semibold">Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Short description of the asset"
+              className="w-full border rounded-lg px-4 py-2"
+              rows={3}
+            />
+          </div>
+
+          <div>
+            <label className="block text-gray-700 mb-2 font-semibold">Documents (IPFS)</label>
+            <input
+              type="text"
+              value={documents}
+              onChange={(e) => setDocuments(e.target.value)}
+              placeholder="ipfs://..."
               className="w-full border rounded-lg px-4 py-2"
             />
           </div>
 
           <div>
-            <label className="block text-gray-700 mb-2 font-semibold">Token URI (Metadata)</label>
+            <label className="block text-gray-700 mb-2 font-semibold">Token URI (NFT Metadata)</label>
             <input
               type="text"
-              value={tokenURI}
-              onChange={(e) => setTokenURI(e.target.value)}
-              placeholder="ipfs://Qm... or https://..."
+              value={tokenUri}
+              onChange={(e) => setTokenUri(e.target.value)}
+              placeholder="ipfs://..."
               className="w-full border rounded-lg px-4 py-2"
             />
-            <p className="text-xs text-gray-500 mt-1">
-              IPFS or HTTP URL pointing to NFT metadata JSON
-            </p>
-          </div>
-
-          <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-sm text-gray-700 mb-2">
-              <strong>Recipient:</strong>
-            </p>
-            <p className="text-xs font-mono text-gray-600">{userAddress}</p>
           </div>
 
           <button
-            onClick={handleMintNFT}
+            onClick={handleCreateAsset}
             disabled={!canTokenize || isPending || isConfirming}
             className={`w-full py-3 rounded-lg font-semibold transition-colors ${
               canTokenize && !isPending && !isConfirming
@@ -412,10 +519,9 @@ function ERC721Tab({ canTokenize, userAddress }: { canTokenize: boolean; userAdd
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
             }`}
           >
-            {isPending ? 'Waiting for approval...' : isConfirming ? 'Minting...' : 'Mint NFT'}
+            {isPending ? 'Waiting for approval...' : isConfirming ? 'Creating...' : 'Create Asset'}
           </button>
 
-          {/* Transaction Status */}
           {hash && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
               <p className="text-sm text-blue-800">
@@ -426,70 +532,34 @@ function ERC721Tab({ canTokenize, userAddress }: { canTokenize: boolean; userAdd
 
           {isSuccess && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-              <p className="text-sm text-green-800 font-semibold">✅ NFT minted successfully!</p>
+              <p className="text-sm text-green-800 font-semibold">Asset created successfully.</p>
             </div>
           )}
 
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-              <p className="text-sm text-red-800">❌ {error.message}</p>
+              <p className="text-sm text-red-800">Error: {error.message}</p>
             </div>
           )}
         </div>
       </div>
 
-      {/* NFT Info */}
       <div className="bg-white border rounded-lg p-6">
-        <h2 className="text-2xl font-bold mb-4">Collection Info</h2>
+        <h2 className="text-2xl font-bold mb-4">Factory Status</h2>
 
-        {isLoadingSupply ? (
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-gray-200 rounded w-3/4"></div>
-            <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+        <div className="space-y-4">
+          <div className="bg-gray-50 rounded-lg p-4">
+            <p className="text-sm text-gray-600 mb-1">Factory Address</p>
+            <p className="text-xs font-mono text-gray-700 break-all">
+              {factoryAddress}
+            </p>
           </div>
-        ) : (
-          <div className="space-y-6">
-            <div className="bg-gray-50 rounded-lg p-6">
-              <p className="text-gray-600 text-sm mb-2">Total NFTs Minted</p>
-              <p className="text-4xl font-bold">{totalSupply?.toString() || '0'}</p>
-              <p className="text-gray-500 text-sm mt-2">unique tokens</p>
-            </div>
 
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Contract:</span>
-                <span className="font-mono text-sm">
-                  {contractAddress.slice(0, 8)}...{contractAddress.slice(-6)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Standard:</span>
-                <span className="font-semibold">ERC721</span>
-              </div>
-            </div>
-
-            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-              <p className="text-sm text-purple-800 mb-2">
-                <strong>Metadata Format:</strong>
-              </p>
-              <pre className="text-xs bg-white p-3 rounded border overflow-x-auto">
-{`{
-  "name": "Asset Name",
-  "description": "...",
-  "image": "ipfs://..."
-}`}
-              </pre>
-            </div>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <p className="text-sm text-blue-800">
+              <strong>Note:</strong> Creation requires ADMIN_ROLE on the Factory contract.
+            </p>
           </div>
-        )}
-      </div>
-
-      {/* Existing NFTs List */}
-      <div className="lg:col-span-2 bg-white border rounded-lg p-6">
-        <h2 className="text-2xl font-bold mb-4">Your NFTs</h2>
-        <div className="text-center py-8 text-gray-500">
-          <p>No NFTs displayed yet</p>
-          <p className="text-sm mt-2">Use useNFTBalance hook to fetch your NFTs</p>
         </div>
       </div>
     </div>

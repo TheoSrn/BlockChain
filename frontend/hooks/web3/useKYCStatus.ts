@@ -7,47 +7,13 @@
 
 import { useAccount, useReadContract } from 'wagmi';
 import { CONTRACT_ADDRESSES } from '@/config/contracts';
-
-/**
- * ABI minimal pour KYCManager
- * À remplacer par l'ABI complet depuis abi/KYCManager.ts
- */
-const KYC_MANAGER_ABI = [
-  {
-    inputs: [{ name: 'user', type: 'address' }],
-    name: 'isKYCVerified',
-    outputs: [{ name: '', type: 'bool' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [{ name: 'user', type: 'address' }],
-    name: 'isWhitelisted',
-    outputs: [{ name: '', type: 'bool' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [{ name: 'user', type: 'address' }],
-    name: 'isBlacklisted',
-    outputs: [{ name: '', type: 'bool' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [{ name: 'user', type: 'address' }],
-    name: 'getKYCLevel',
-    outputs: [{ name: '', type: 'uint8' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-] as const;
+import KYC_MANAGER_ABI from '@/abi/KYCManager';
 
 export interface KYCStatus {
   /** Adresse vérifiée */
   address: `0x${string}`;
   
-  /** KYC vérifié ? */
+  /** KYC verifie ? */
   isKYCVerified: boolean;
   
   /** Whitelisté ? */
@@ -55,9 +21,6 @@ export interface KYCStatus {
   
   /** Blacklisté ? */
   isBlacklisted: boolean;
-  
-  /** Niveau KYC (0 = aucun, 1 = basique, 2 = avancé, etc.) */
-  kycLevel: number;
   
   /** Peut trader ? (KYC OK + Whitelist OK + Non blacklisté) */
   canTrade: boolean;
@@ -69,76 +32,87 @@ export interface KYCStatus {
 /**
  * Hook principal pour le statut KYC
  */
-export function useKYCStatus(userAddress?: `0x${string}`) {
+type KycStatusOptions = {
+  refetchInterval?: number | false;
+  refetchOnWindowFocus?: boolean;
+};
+
+export function useKYCStatus(
+  userAddress?: `0x${string}`,
+  options?: KycStatusOptions
+) {
   const { address: connectedAddress } = useAccount();
   const address = userAddress || connectedAddress;
+  const { refetchInterval = 60_000, refetchOnWindowFocus = false } = options ?? {};
 
   // Lecture KYC vérifié
-  const { data: isKYCVerified, isLoading: kycLoading } = useReadContract({
+  const {
+    data: isVerified,
+    isLoading: kycLoading,
+    refetch: refetchVerified,
+  } = useReadContract({
     address: CONTRACT_ADDRESSES.KYC_MANAGER as `0x${string}`,
     abi: KYC_MANAGER_ABI,
-    functionName: 'isKYCVerified',
+    functionName: 'isVerified',
     args: address ? [address] : undefined,
     query: {
       enabled: !!address,
-      refetchInterval: 10_000, // Refresh toutes les 10s
+      refetchInterval,
+      refetchOnWindowFocus,
     },
   });
 
   // Lecture whitelist
-  const { data: isWhitelisted, isLoading: whitelistLoading } = useReadContract({
+  const {
+    data: isWhitelisted,
+    isLoading: whitelistLoading,
+    refetch: refetchWhitelisted,
+  } = useReadContract({
     address: CONTRACT_ADDRESSES.KYC_MANAGER as `0x${string}`,
     abi: KYC_MANAGER_ABI,
     functionName: 'isWhitelisted',
     args: address ? [address] : undefined,
     query: {
       enabled: !!address,
-      refetchInterval: 10_000,
+      refetchInterval,
+      refetchOnWindowFocus,
     },
   });
 
   // Lecture blacklist
-  const { data: isBlacklisted, isLoading: blacklistLoading } = useReadContract({
+  const {
+    data: isBlacklisted,
+    isLoading: blacklistLoading,
+    refetch: refetchBlacklisted,
+  } = useReadContract({
     address: CONTRACT_ADDRESSES.KYC_MANAGER as `0x${string}`,
     abi: KYC_MANAGER_ABI,
     functionName: 'isBlacklisted',
     args: address ? [address] : undefined,
     query: {
       enabled: !!address,
-      refetchInterval: 10_000,
+      refetchInterval,
+      refetchOnWindowFocus,
     },
   });
 
-  // Lecture niveau KYC
-  const { data: kycLevel, isLoading: levelLoading } = useReadContract({
-    address: CONTRACT_ADDRESSES.KYC_MANAGER as `0x${string}`,
-    abi: KYC_MANAGER_ABI,
-    functionName: 'getKYCLevel',
-    args: address ? [address] : undefined,
-    query: {
-      enabled: !!address,
-      refetchInterval: 10_000,
-    },
-  });
-
-  const isLoading = kycLoading || whitelistLoading || blacklistLoading || levelLoading;
+  const isLoading = kycLoading || whitelistLoading || blacklistLoading;
 
   // Calcul du statut complet
   const kycStatus: KYCStatus | null = address
     ? {
         address,
-        isKYCVerified: isKYCVerified ?? false,
+        isKYCVerified: isVerified ?? false,
         isWhitelisted: isWhitelisted ?? false,
         isBlacklisted: isBlacklisted ?? false,
-        kycLevel: kycLevel ? Number(kycLevel) : 0,
         canTrade: !!(
-          (isKYCVerified ?? false) &&
+          (isVerified ?? false) &&
           (isWhitelisted ?? false) &&
           !(isBlacklisted ?? false)
         ),
         reason: (isBlacklisted ?? false)
           ? '🚫 Address is blacklisted'
-          : !(isKYCVerified ?? false)
+          : !(isVerified ?? false)
           ? '⚠️ KYC verification required'
           : !(isWhitelisted ?? false)
           ? '⚠️ Address not whitelisted'
@@ -146,16 +120,24 @@ export function useKYCStatus(userAddress?: `0x${string}`) {
       }
     : null;
 
+  const refetch = async () => {
+    await Promise.all([
+      refetchVerified(),
+      refetchWhitelisted(),
+      refetchBlacklisted(),
+    ]);
+  };
+
   return {
     kycStatus,
     isLoading,
+    refetch,
     
     // Shortcuts pour faciliter l'utilisation
     canTrade: kycStatus?.canTrade ?? false,
     isKYCVerified: kycStatus?.isKYCVerified ?? false,
     isWhitelisted: kycStatus?.isWhitelisted ?? false,
     isBlacklisted: kycStatus?.isBlacklisted ?? false,
-    kycLevel: kycStatus?.kycLevel ?? 0,
     reason: kycStatus?.reason,
   };
 }

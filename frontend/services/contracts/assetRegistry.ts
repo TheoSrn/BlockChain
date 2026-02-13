@@ -6,52 +6,82 @@
 import { readContract, writeContract } from '@wagmi/core';
 import { config } from '@/config/wagmi';
 import { CONTRACT_ADDRESSES } from '@/config/contracts';
-import ASSET_REGISTRY_ABI from '@/abi/AssetRegistry';
-import type { TokenizedAsset } from '@/types';
+import FACTORY_ABI from '@/abi/Factory';
+
+export interface AssetRecord {
+  id: bigint;
+  nft: string;
+  token: string;
+  pool: string;
+  name: string;
+  symbol: string;
+  active: boolean;
+}
 
 export class AssetRegistryService {
   /**
    * Récupère tous les actifs enregistrés
    */
-  static async getAllAssets(): Promise<string[]> {
+  static async getAllAssets(): Promise<AssetRecord[]> {
     try {
-      const assets = await readContract(config, {
-        address: CONTRACT_ADDRESSES.ASSET_REGISTRY as `0x${string}`,
-        abi: ASSET_REGISTRY_ABI,
-        functionName: 'getAllAssets',
+      const count = await readContract(config, {
+        address: CONTRACT_ADDRESSES.ASSET_FACTORY as `0x${string}`,
+        abi: FACTORY_ABI,
+        functionName: 'assetCount',
       });
-      return assets as string[];
+
+      const assetCount = Number(count as bigint);
+      const assets: AssetRecord[] = [];
+
+      for (let i = 1; i <= assetCount; i++) {
+        const asset = await readContract(config, {
+          address: CONTRACT_ADDRESSES.ASSET_FACTORY as `0x${string}`,
+          abi: FACTORY_ABI,
+          functionName: 'getAsset',
+          args: [BigInt(i)],
+        });
+
+        const [id, nft, token, pool, name, symbol, active] = asset as any[];
+        assets.push({
+          id,
+          nft,
+          token,
+          pool,
+          name,
+          symbol,
+          active,
+        });
+      }
+
+      return assets;
     } catch (error) {
       console.error('Error fetching all assets:', error);
-      return [];
+      return [] as AssetRecord[];
     }
   }
 
   /**
    * Récupère les informations d'un actif
    */
-  static async getAssetInfo(assetAddress: string): Promise<TokenizedAsset | null> {
+  static async getAssetInfo(assetId: number): Promise<AssetRecord | null> {
     try {
-      const info = await readContract(config, {
-        address: CONTRACT_ADDRESSES.ASSET_REGISTRY as `0x${string}`,
-        abi: ASSET_REGISTRY_ABI,
-        functionName: 'getAssetInfo',
-        args: [assetAddress as `0x${string}`],
+      const asset = await readContract(config, {
+        address: CONTRACT_ADDRESSES.ASSET_FACTORY as `0x${string}`,
+        abi: FACTORY_ABI,
+        functionName: 'getAsset',
+        args: [BigInt(assetId)],
       });
 
-      const [name, symbol, totalSupply, valueUSD, assetType, isActive] = info as any[];
-
+      const [id, nft, token, pool, name, symbol, active] = asset as any[];
       return {
-        address: assetAddress,
+        id,
+        nft,
+        token,
+        pool,
         name,
         symbol,
-        totalSupply,
-        valueUSD,
-        assetType: 'OTHER', // Map from uint8
-        isActive,
-        complianceRequired: true,
-        createdAt: 0,
-      };
+        active,
+      } as AssetRecord;
     } catch (error) {
       console.error('Error fetching asset info:', error);
       return null;
@@ -62,16 +92,38 @@ export class AssetRegistryService {
    * Crée un nouvel actif
    */
   static async createAsset(params: {
-    name: string;
-    symbol: string;
-    assetType: number;
+    tokenName: string;
+    tokenSymbol: string;
+    nftName: string;
+    nftSymbol: string;
+    treasury: string;
+    initialSupply: bigint;
+    location: string;
+    surface: bigint;
+    estimatedValue: bigint;
+    description: string;
+    documents: string;
+    tokenUri: string;
   }): Promise<string> {
     try {
       const hash = await writeContract(config, {
-        address: CONTRACT_ADDRESSES.ASSET_REGISTRY as `0x${string}`,
-        abi: ASSET_REGISTRY_ABI,
+        address: CONTRACT_ADDRESSES.ASSET_FACTORY as `0x${string}`,
+        abi: FACTORY_ABI,
         functionName: 'createAsset',
-        args: [params.name, params.symbol, params.assetType],
+        args: [
+          params.tokenName,
+          params.tokenSymbol,
+          params.nftName,
+          params.nftSymbol,
+          params.treasury as `0x${string}`,
+          params.initialSupply,
+          params.location,
+          params.surface,
+          params.estimatedValue,
+          params.description,
+          params.documents,
+          params.tokenUri,
+        ],
       });
       return hash;
     } catch (error) {
@@ -83,15 +135,16 @@ export class AssetRegistryService {
   /**
    * Vérifie si un actif est enregistré
    */
-  static async isAssetRegistered(assetAddress: string): Promise<boolean> {
+  static async isAssetRegistered(assetId: number): Promise<boolean> {
     try {
-      const registered = await readContract(config, {
-        address: CONTRACT_ADDRESSES.ASSET_REGISTRY as `0x${string}`,
-        abi: ASSET_REGISTRY_ABI,
-        functionName: 'isAssetRegistered',
-        args: [assetAddress as `0x${string}`],
+      const asset = await readContract(config, {
+        address: CONTRACT_ADDRESSES.ASSET_FACTORY as `0x${string}`,
+        abi: FACTORY_ABI,
+        functionName: 'getAsset',
+        args: [BigInt(assetId)],
       });
-      return registered as boolean;
+      const [, , , , , , active] = asset as any[];
+      return Boolean(active);
     } catch (error) {
       console.error('Error checking asset registration:', error);
       return false;

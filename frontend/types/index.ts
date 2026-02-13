@@ -8,7 +8,6 @@ export interface User {
   isKYCVerified: boolean;
   isWhitelisted: boolean;
   isBlacklisted: boolean;
-  kycLevel: number;
   registrationDate: number;
 }
 

@@ -1,16 +1,8 @@
 /**
- * ABI Exemple : KYC Manager Contract
- * Remplacez ce fichier par votre ABI réel généré par Hardhat/Foundry
+ * ABI KYC Contract
  */
 
 export const KYC_MANAGER_ABI = [
-  {
-    inputs: [{ name: 'user', type: 'address' }],
-    name: 'isKYCVerified',
-    outputs: [{ name: '', type: 'bool' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
   {
     inputs: [{ name: 'user', type: 'address' }],
     name: 'isWhitelisted',
@@ -27,59 +19,50 @@ export const KYC_MANAGER_ABI = [
   },
   {
     inputs: [{ name: 'user', type: 'address' }],
-    name: 'getKYCLevel',
-    outputs: [{ name: '', type: 'uint8' }],
+    name: 'isVerified',
+    outputs: [{ name: '', type: 'bool' }],
     stateMutability: 'view',
     type: 'function',
   },
   {
     inputs: [
       { name: 'user', type: 'address' },
-      { name: 'level', type: 'uint8' },
+      { name: 'status', type: 'bool' },
     ],
-    name: 'setKYCLevel',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    inputs: [{ name: 'user', type: 'address' }],
-    name: 'addToWhitelist',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    inputs: [{ name: 'user', type: 'address' }],
-    name: 'removeFromWhitelist',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    inputs: [{ name: 'user', type: 'address' }],
-    name: 'addToBlacklist',
+    name: 'setWhitelisted',
     outputs: [],
     stateMutability: 'nonpayable',
     type: 'function',
   },
   {
     inputs: [
-      { name: 'user', type: 'address', indexed: true },
-      { name: 'level', type: 'uint8' },
+      { name: 'user', type: 'address' },
+      { name: 'status', type: 'bool' },
     ],
-    name: 'KYCLevelUpdated',
-    type: 'event',
+    name: 'setBlacklisted',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    inputs: [{ name: 'user', type: 'address', indexed: true }],
-    name: 'AddedToWhitelist',
-    type: 'event',
+    inputs: [
+      { name: 'users', type: 'address[]' },
+      { name: 'status', type: 'bool' },
+    ],
+    name: 'setBatchWhitelisted',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    inputs: [{ name: 'user', type: 'address', indexed: true }],
-    name: 'AddedToBlacklist',
-    type: 'event',
+    inputs: [
+      { name: 'users', type: 'address[]' },
+      { name: 'status', type: 'bool' },
+    ],
+    name: 'setBatchBlacklisted',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
 ] as const;
 

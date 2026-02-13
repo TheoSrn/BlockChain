@@ -8,11 +8,11 @@ import { CONTRACT_ADDRESSES } from '@/config/contracts';
 
 const PRICE_ORACLE_ABI = [
   {
-    inputs: [{ name: 'asset', type: 'address' }],
-    name: 'getLatestPrice',
+    inputs: [{ name: 'assetId', type: 'uint256' }],
+    name: 'getPrice',
     outputs: [
       { name: 'price', type: 'uint256' },
-      { name: 'timestamp', type: 'uint256' },
+      { name: 'updatedAt', type: 'uint256' },
     ],
     stateMutability: 'view',
     type: 'function',
@@ -23,7 +23,7 @@ export class OracleService {
   /**
    * Récupère le dernier prix d'un actif
    */
-  static async getLatestPrice(assetAddress: string): Promise<{
+  static async getLatestPrice(assetId: number): Promise<{
     price: bigint;
     timestamp: number;
   } | null> {
@@ -31,8 +31,8 @@ export class OracleService {
       const result = await readContract(config, {
         address: CONTRACT_ADDRESSES.PRICE_ORACLE as `0x${string}`,
         abi: PRICE_ORACLE_ABI,
-        functionName: 'getLatestPrice',
-        args: [assetAddress as `0x${string}`],
+        functionName: 'getPrice',
+        args: [BigInt(assetId)],
       });
 
       const [price, timestamp] = result as [bigint, bigint];

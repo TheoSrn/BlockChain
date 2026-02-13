@@ -6,29 +6,49 @@
  * ➕ Synchronisation on-chain en temps réel
  */
 
-import { useAccount } from 'wagmi';
+import { useAccount, useReadContract } from 'wagmi';
 import Link from 'next/link';
 import { useTokenBalances } from '@/hooks/web3/useTokenBalances';
 import { useNFTBalance } from '@/hooks/web3/useNFTs';
 import { useIndexer, useUserActivity } from '@/hooks/web3/useIndexer';
-import { CONTRACT_ADDRESSES } from '@/config/contracts';
+import { CONTRACT_ADDRESSES, DEFAULT_ASSET_ID } from '@/config/contracts';
 import { IndexerSyncService, EventType } from '@/services/indexer/indexer';
+import FACTORY_ABI from '@/abi/Factory';
 
 export default function DashboardPage() {
   const { address, isConnected } = useAccount();
+
+  const factoryAddress = CONTRACT_ADDRESSES.ASSET_FACTORY;
+  const hasFactory = factoryAddress !== '0x0000000000000000000000000000000000000000';
+  const assetId = BigInt(DEFAULT_ASSET_ID);
+
+  const { data: assetRecord } = useReadContract({
+    address: factoryAddress as `0x${string}`,
+    abi: FACTORY_ABI,
+    functionName: 'getAsset',
+    args: [assetId],
+    query: {
+      enabled: hasFactory,
+      refetchInterval: 10_000,
+    },
+  });
+
+  const assetTokenAddress = assetRecord ? (assetRecord as any[])[2] as string : undefined;
+  const assetNftAddress = assetRecord ? (assetRecord as any[])[1] as string : undefined;
 
   // Récupérer les balances des tokens ERC20
   const tokenAddresses = [
     CONTRACT_ADDRESSES.USDC,
     CONTRACT_ADDRESSES.USDT,
+    assetTokenAddress,
     // Ajouter d'autres tokens ici
-  ].filter(addr => addr && addr !== '0x0000000000000000000000000000000000000000');
+  ].filter(addr => addr && addr !== '0x0000000000000000000000000000000000000000') as string[];
 
   const { balances, totalUsdValue, isLoading: isLoadingBalances } = useTokenBalances(tokenAddresses);
 
   // Récupérer les NFTs ERC721 (Asset Registry)
-  const assetRegistryAddress = CONTRACT_ADDRESSES.ASSET_REGISTRY !== '0x0000000000000000000000000000000000000000'
-    ? CONTRACT_ADDRESSES.ASSET_REGISTRY
+  const assetRegistryAddress = assetNftAddress && assetNftAddress !== '0x0000000000000000000000000000000000000000'
+    ? assetNftAddress
     : undefined;
 
   const {
@@ -220,7 +240,7 @@ export default function DashboardPage() {
             ) : !assetRegistryAddress ? (
               <div className="text-center py-8 text-gray-500">
                 <p>No NFT contract configured</p>
-                <p className="text-sm mt-2">Add ASSET_REGISTRY address in .env.local</p>
+                <p className="text-sm mt-2">Add ASSET_FACTORY and DEFAULT_ASSET_ID in .env.local</p>
               </div>
             ) : nfts.length === 0 ? (
               <div className="text-center py-8 text-gray-500">

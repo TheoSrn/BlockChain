@@ -5,14 +5,29 @@
  * Affiche le statut de conformité et permet la soumission KYC
  */
 
-import { useAccount } from 'wagmi';
+import { useAccount, useWaitForTransactionReceipt, useWriteContract } from 'wagmi';
 import { useKYCStatus } from '@/hooks/web3/useKYCStatus';
 import { KYCStatusDisplay } from '@/components/web3/KYCStatusDisplay';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { CONTRACT_ADDRESSES } from '@/config/contracts';
+import KYC_MANAGER_ABI from '@/abi/KYCManager';
 
 export default function KYCPage() {
   const { address, isConnected } = useAccount();
-  const { kycStatus, isLoading } = useKYCStatus();
+  const { kycStatus, isLoading, refetch } = useKYCStatus(undefined, {
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+  });
+  const { writeContract, data: txHash, isPending, error: writeError } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+    hash: txHash,
+  });
+    useEffect(() => {
+      if (isSuccess) {
+        refetch();
+      }
+    }, [isSuccess, refetch]);
+
   const [formData, setFormData] = useState({
     fullName: '',
     country: '',
@@ -37,8 +52,14 @@ export default function KYCPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // KYC logic would be handled by backend/smart contracts
-    alert('KYC submission would be sent to backend/smart contract verification system');
+    if (!address) return;
+
+    writeContract({
+      address: CONTRACT_ADDRESSES.KYC_MANAGER as `0x${string}`,
+      abi: KYC_MANAGER_ABI,
+      functionName: 'setWhitelisted',
+      args: [address, true],
+    });
   };
 
   return (
@@ -71,11 +92,6 @@ export default function KYCPage() {
               <p className="mb-4 text-gray-300">
                 Your identity has been successfully verified
               </p>
-              {kycStatus.kycLevel > 0 && (
-                <div className="mt-4 inline-flex items-center gap-2 rounded-lg bg-purple-500/20 px-4 py-2 text-sm font-medium text-purple-300">
-                  <span>KYC Level {kycStatus.kycLevel}</span>
-                </div>
-              )}
             </div>
           ) : (
             <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-6">
@@ -158,16 +174,33 @@ export default function KYCPage() {
 
                 <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-4">
                   <p className="text-sm text-yellow-400">
-                    ⚠️ This is a demo form. In production, KYC verification would be
-                    handled by your backend system and validated on-chain.
+                    ⚠️ This demo submits an on-chain whitelist transaction. The
+                    connected wallet must have the KYC admin role.
                   </p>
                 </div>
 
+                {writeError ? (
+                  <div className="rounded-lg border border-red-500/50 bg-red-500/10 p-4">
+                    <p className="text-sm text-red-400">
+                      Transaction failed. Make sure your wallet is KYC admin.
+                    </p>
+                  </div>
+                ) : null}
+
+                {isSuccess ? (
+                  <div className="rounded-lg border border-green-500/50 bg-green-500/10 p-4">
+                    <p className="text-sm text-green-400">
+                      ✅ KYC status updated on-chain.
+                    </p>
+                  </div>
+                ) : null}
+
                 <button
                   type="submit"
-                  className="w-full rounded-lg bg-purple-600 py-3 font-semibold text-white transition-colors hover:bg-purple-700"
+                  className="w-full rounded-lg bg-purple-600 py-3 font-semibold text-white transition-colors hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isPending || isConfirming}
                 >
-                  Submit KYC Application
+                  {isPending || isConfirming ? 'Submitting...' : 'Submit KYC Application'}
                 </button>
               </form>
             </div>

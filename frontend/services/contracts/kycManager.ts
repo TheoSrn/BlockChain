@@ -14,11 +14,11 @@ export class KYCManagerService {
    */
   static async checkCompliance(address: string): Promise<ComplianceCheck> {
     try {
-      const [isKYCVerified, isWhitelisted, isBlacklisted] = await Promise.all([
+      const [isVerified, isWhitelisted, isBlacklisted] = await Promise.all([
         readContract(config, {
           address: CONTRACT_ADDRESSES.KYC_MANAGER as `0x${string}`,
           abi: KYC_MANAGER_ABI,
-          functionName: 'isKYCVerified',
+          functionName: 'isVerified',
           args: [address as `0x${string}`],
         }),
         readContract(config, {
@@ -35,10 +35,10 @@ export class KYCManagerService {
         }),
       ]);
 
-      const canTrade = isKYCVerified && isWhitelisted && !isBlacklisted;
+      const canTrade = isVerified && isWhitelisted && !isBlacklisted;
       const restrictions = [];
 
-      if (!isKYCVerified) restrictions.push('NO_KYC');
+      if (!isVerified) restrictions.push('NO_KYC');
       if (isBlacklisted) restrictions.push('BLACKLISTED');
       if (!isWhitelisted) restrictions.push('NOT_WHITELISTED');
 
@@ -60,24 +60,6 @@ export class KYCManagerService {
   }
 
   /**
-   * Définit le niveau KYC (admin only)
-   */
-  static async setKYCLevel(userAddress: string, level: number): Promise<string> {
-    try {
-      const hash = await writeContract(config, {
-        address: CONTRACT_ADDRESSES.KYC_MANAGER as `0x${string}`,
-        abi: KYC_MANAGER_ABI,
-        functionName: 'setKYCLevel',
-        args: [userAddress as `0x${string}`, level],
-      });
-      return hash;
-    } catch (error) {
-      console.error('Error setting KYC level:', error);
-      throw error;
-    }
-  }
-
-  /**
    * Ajoute à la whitelist (admin only)
    */
   static async addToWhitelist(userAddress: string): Promise<string> {
@@ -85,8 +67,8 @@ export class KYCManagerService {
       const hash = await writeContract(config, {
         address: CONTRACT_ADDRESSES.KYC_MANAGER as `0x${string}`,
         abi: KYC_MANAGER_ABI,
-        functionName: 'addToWhitelist',
-        args: [userAddress as `0x${string}`],
+        functionName: 'setWhitelisted',
+        args: [userAddress as `0x${string}`, true],
       });
       return hash;
     } catch (error) {
@@ -103,8 +85,8 @@ export class KYCManagerService {
       const hash = await writeContract(config, {
         address: CONTRACT_ADDRESSES.KYC_MANAGER as `0x${string}`,
         abi: KYC_MANAGER_ABI,
-        functionName: 'removeFromWhitelist',
-        args: [userAddress as `0x${string}`],
+        functionName: 'setWhitelisted',
+        args: [userAddress as `0x${string}`, false],
       });
       return hash;
     } catch (error) {
@@ -121,12 +103,30 @@ export class KYCManagerService {
       const hash = await writeContract(config, {
         address: CONTRACT_ADDRESSES.KYC_MANAGER as `0x${string}`,
         abi: KYC_MANAGER_ABI,
-        functionName: 'addToBlacklist',
-        args: [userAddress as `0x${string}`],
+        functionName: 'setBlacklisted',
+        args: [userAddress as `0x${string}`, true],
       });
       return hash;
     } catch (error) {
       console.error('Error adding to blacklist:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Retire de la blacklist (admin only)
+   */
+  static async removeFromBlacklist(userAddress: string): Promise<string> {
+    try {
+      const hash = await writeContract(config, {
+        address: CONTRACT_ADDRESSES.KYC_MANAGER as `0x${string}`,
+        abi: KYC_MANAGER_ABI,
+        functionName: 'setBlacklisted',
+        args: [userAddress as `0x${string}`, false],
+      });
+      return hash;
+    } catch (error) {
+      console.error('Error removing from blacklist:', error);
       throw error;
     }
   }

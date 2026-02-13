@@ -4,30 +4,90 @@
  * Page Oracle - Prix en temps réel avec rafraîchissement automatique
  */
 
-import { useAccount } from 'wagmi';
-import { useState, useEffect } from 'react';
+import { useAccount, useReadContract, useReadContracts } from 'wagmi';
+import { useState, useEffect, useMemo } from 'react';
 import { useOracle, usePriceHistory } from '@/hooks/web3/useOracle';
-import { CONTRACT_ADDRESSES } from '@/config/contracts';
+import { CONTRACT_ADDRESSES, DEFAULT_ASSET_ID } from '@/config/contracts';
+import FACTORY_ABI from '@/abi/Factory';
 
-// Assets disponibles pour le pricing
-const AVAILABLE_ASSETS = [
-  { address: CONTRACT_ADDRESSES.USDC, name: 'USD Coin', symbol: 'USDC' },
-  { address: CONTRACT_ADDRESSES.USDT, name: 'Tether USD', symbol: 'USDT' },
-  { address: '0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6', name: 'Wrapped Ether', symbol: 'WETH' },
-];
+type AssetOption = {
+  id: bigint;
+  name: string;
+  symbol: string;
+};
 
 export default function OraclePage() {
   const { isConnected } = useAccount();
-  const [selectedAsset, setSelectedAsset] = useState(AVAILABLE_ASSETS[0].address);
-  const [lastUpdate, setLastUpdate] = useState(new Date());
+  const [selectedAsset, setSelectedAsset] = useState<bigint>(BigInt(DEFAULT_ASSET_ID));
+
+  const factoryAddress = CONTRACT_ADDRESSES.ASSET_FACTORY;
+  const hasFactory = factoryAddress !== '0x0000000000000000000000000000000000000000';
+
+  const { data: assetCountData } = useReadContract({
+    address: factoryAddress as `0x${string}`,
+    abi: FACTORY_ABI,
+    functionName: 'assetCount',
+    query: {
+      enabled: hasFactory,
+      refetchInterval: 10_000,
+    },
+  });
+
+  const assetCount = Number(assetCountData ?? 0n);
+  const assetIds = useMemo(() => {
+    if (assetCount > 0) {
+      return Array.from({ length: assetCount }, (_, i) => BigInt(i + 1));
+    }
+    return [BigInt(DEFAULT_ASSET_ID)];
+  }, [assetCount]);
+
+  const { data: assetsData } = useReadContracts({
+    contracts: assetIds.map((id) => ({
+      address: factoryAddress as `0x${string}`,
+      abi: FACTORY_ABI,
+      functionName: 'getAsset',
+      args: [id],
+    })),
+    query: {
+      enabled: hasFactory && assetCount > 0,
+      refetchInterval: 10_000,
+    },
+  });
+
+  const availableAssets: AssetOption[] = useMemo(() => {
+    if (!assetsData || assetsData.length === 0) {
+      return [
+        {
+          id: BigInt(DEFAULT_ASSET_ID),
+          name: `Asset ${DEFAULT_ASSET_ID}`,
+          symbol: `ASSET${DEFAULT_ASSET_ID}`,
+        },
+      ];
+    }
+
+    return assetsData
+      .map((result) => {
+        if (result.status !== 'success') return null;
+        const [id, , , , name, symbol] = result.result as unknown as [
+          bigint,
+          string,
+          string,
+          string,
+          string,
+          string,
+          boolean
+        ];
+        return { id, name, symbol };
+      })
+      .filter(Boolean) as AssetOption[];
+  }, [assetsData]);
 
   // Met à jour le timestamp toutes les secondes
   useEffect(() => {
-    const interval = setInterval(() => {
-      setLastUpdate(new Date());
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
+    if (availableAssets.length > 0) {
+      setSelectedAsset(availableAssets[0].id);
+    }
+  }, [availableAssets]);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -57,12 +117,12 @@ export default function OraclePage() {
       <div className="bg-white border rounded-xl p-6 mb-6">
         <label className="block text-gray-700 mb-3 font-semibold">Select Asset</label>
         <select
-          value={selectedAsset}
-          onChange={(e) => setSelectedAsset(e.target.value)}
+          value={selectedAsset.toString()}
+          onChange={(e) => setSelectedAsset(BigInt(e.target.value))}
           className="w-full border rounded-lg px-4 py-3 text-lg"
         >
-          {AVAILABLE_ASSETS.map((asset) => (
-            <option key={asset.symbol} value={asset.address}>
+          {availableAssets.map((asset) => (
+            <option key={asset.id.toString()} value={asset.id.toString()}>
               {asset.name} ({asset.symbol})
             </option>
           ))}
@@ -71,15 +131,15 @@ export default function OraclePage() {
 
       {/* Price Display - Uses multiple components for each asset */}
       <div className="grid gap-6 lg:grid-cols-3 mb-6">
-        {AVAILABLE_ASSETS.map((asset) => (
-          <PriceCard key={asset.symbol} asset={asset} />
+        {availableAssets.map((asset) => (
+          <PriceCard key={asset.id.toString()} asset={asset} />
         ))}
       </div>
 
       {/* Selected Asset Details */}
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <PriceDetails assetAddress={selectedAsset} />
+          <PriceDetails assetId={selectedAsset} assets={availableAssets} />
         </div>
 
         <div className="space-y-6">
@@ -127,8 +187,8 @@ export default function OraclePage() {
 }
 
 // Composant pour afficher le prix d'un asset
-function PriceCard({ asset }: { asset: typeof AVAILABLE_ASSETS[0] }) {
-  const { priceData, isLoading, error } = useOracle(asset.address);
+function PriceCard({ asset }: { asset: AssetOption }) {
+  const { priceData, isLoading, error } = useOracle(asset.id);
 
   return (
     <div className="bg-white border rounded-xl p-6">
@@ -169,12 +229,12 @@ function PriceCard({ asset }: { asset: typeof AVAILABLE_ASSETS[0] }) {
 }
 
 // Composant détaillé pour l'asset sélectionné
-function PriceDetails({ assetAddress }: { assetAddress: string }) {
-  const { priceData, isLoading, error } = useOracle(assetAddress);
-  const { history } = usePriceHistory(assetAddress);
+function PriceDetails({ assetId, assets }: { assetId: bigint; assets: AssetOption[] }) {
+  const { priceData, isLoading, error } = useOracle(assetId);
+  const { history } = usePriceHistory();
   const [timeAgo, setTimeAgo] = useState('');
 
-  const asset = AVAILABLE_ASSETS.find((a) => a.address === assetAddress);
+  const asset = assets.find((a) => a.id === assetId);
 
   useEffect(() => {
     if (priceData) {
