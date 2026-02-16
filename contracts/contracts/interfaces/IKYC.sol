@@ -4,4 +4,5 @@ pragma solidity ^0.8.20;
 interface IKYC {
     function isWhitelisted(address user) external view returns (bool);
     function isBlacklisted(address user) external view returns (bool);
+    function isVerified(address user) external view returns (bool);
 }

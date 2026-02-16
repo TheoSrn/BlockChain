@@ -130,7 +130,8 @@ contract Factory is AccessControl {
 			admin,
 			uniswapRouter,
 			address(token),
-			baseToken
+			baseToken,
+			kyc
 		);
 
 		assets[assetId] = AssetRecord({

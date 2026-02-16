@@ -54,11 +54,17 @@ export default function KYCPage() {
     e.preventDefault();
     if (!address) return;
 
+    // Submit KYC application (anyone can call this)
     writeContract({
       address: CONTRACT_ADDRESSES.KYC_MANAGER as `0x${string}`,
       abi: KYC_MANAGER_ABI,
-      functionName: 'setWhitelisted',
-      args: [address, true],
+      functionName: 'submitKYC',
+      args: [
+        formData.fullName,
+        formData.country,
+        formData.documentType,
+        formData.documentNumber,
+      ],
     });
   };
 
@@ -172,17 +178,17 @@ export default function KYCPage() {
                   />
                 </div>
 
-                <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-4">
-                  <p className="text-sm text-yellow-400">
-                    ⚠️ This demo submits an on-chain whitelist transaction. The
-                    connected wallet must have the KYC admin role.
+                <div className="rounded-lg border border-blue-500/50 bg-blue-500/10 p-4">
+                  <p className="text-sm text-blue-400">
+                    ℹ️ Your KYC application will be reviewed by an administrator.
+                    You'll be notified once approved.
                   </p>
                 </div>
 
                 {writeError ? (
                   <div className="rounded-lg border border-red-500/50 bg-red-500/10 p-4">
                     <p className="text-sm text-red-400">
-                      Transaction failed. Make sure your wallet is KYC admin.
+                      Transaction failed: {writeError.message}
                     </p>
                   </div>
                 ) : null}
@@ -190,7 +196,7 @@ export default function KYCPage() {
                 {isSuccess ? (
                   <div className="rounded-lg border border-green-500/50 bg-green-500/10 p-4">
                     <p className="text-sm text-green-400">
-                      ✅ KYC status updated on-chain.
+                      ✅ KYC application submitted! Waiting for admin approval.
                     </p>
                   </div>
                 ) : null}

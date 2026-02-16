@@ -1,8 +1,5 @@
-/**
- * ABI KYC Contract - Complete with manual approval workflow
- */
-
-export const KYC_MANAGER_ABI = [
+// KYC ABI - Contrat KYC complet avec système de demandes
+export const kycABI = [
   {
     inputs: [{ internalType: "address", name: "admin", type: "address" }],
     stateMutability: "nonpayable",
@@ -174,5 +171,3 @@ export const KYC_MANAGER_ABI = [
     type: "function",
   },
 ] as const;
-
-export default KYC_MANAGER_ABI;

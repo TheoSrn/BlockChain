@@ -51,7 +51,31 @@ const { data } = useReadContract({
 
 ## Fichiers actuels
 
-- `KYCManager.ts` : ABI exemple pour le contrat de gestion KYC
-- `AssetRegistry.ts` : ABI exemple pour le registre d'actifs
+- `Factory.ts` : ABI for the Asset Factory contract (creates and manages tokenized assets)
+- `KYCManager.ts` : ABI for KYC/Compliance management
+- `AssetRegistry.ts` : ABI for the asset registry
+- `Oracle.ts` : **ABI for the on-chain Oracle** - Provides price feeds for real-world assets and NFT collections
 
-**⚠️ Remplacez ces fichiers par vos ABIs réels !**
+### Oracle ABI
+
+The Oracle ABI is particularly important as it enables:
+- Real-time price queries for tokenized assets (`getPrice`)
+- Asset information retrieval (`getAsset`)
+- Price updates by authorized admins (`setPrice`)
+- Event monitoring (`PriceUpdated`, `AssetRegistered`)
+
+**Example usage:**
+```typescript
+import { useReadContract } from 'wagmi';
+import ORACLE_ABI from '@/abi/Oracle';
+
+const { data } = useReadContract({
+  address: oracleAddress,
+  abi: ORACLE_ABI,
+  functionName: 'getPrice',
+  args: [assetId],
+});
+// Returns: [price (uint256), timestamp (uint256)]
+```
+
+**⚠️ Note:** Make sure Oracle contract is deployed to use these price feeds!

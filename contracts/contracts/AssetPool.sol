@@ -6,6 +6,7 @@ import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Ini
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {IUniswapV2Router02} from "./interfaces/IUniswapV2Router02.sol";
+import {IKYC} from "./interfaces/IKYC.sol";
 
 contract AssetPool is Initializable, AccessControlUpgradeable {
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
@@ -14,11 +15,22 @@ contract AssetPool is Initializable, AccessControlUpgradeable {
     address public baseToken;
     IUniswapV2Router02 public router;
     address public lpToken;
+    IKYC public kyc;
+    bool public kycRequired = true;
 
     event LiquidityAdded(address indexed provider, uint256 amountAsset, uint256 amountBase, uint256 liquidity);
     event LiquidityRemoved(address indexed provider, uint256 amountAsset, uint256 amountBase);
     event Swap(address indexed trader, address indexed tokenIn, uint256 amountIn, uint256 amountOut);
     event LpTokenSet(address indexed lpToken);
+    event KycUpdated(address indexed kyc);
+    event KycRequiredUpdated(bool required);
+
+    modifier onlyVerified() {
+        if (kycRequired) {
+            require(kyc.isVerified(msg.sender), "KYC_REQUIRED");
+        }
+        _;
+    }
 
     constructor() {
         _disableInitializers();
@@ -28,12 +40,14 @@ contract AssetPool is Initializable, AccessControlUpgradeable {
         address admin,
         address routerAddress,
         address assetTokenAddress,
-        address baseTokenAddress
+        address baseTokenAddress,
+        address kycAddress
     ) external initializer {
         require(admin != address(0), "ADMIN_ZERO");
         require(routerAddress != address(0), "ROUTER_ZERO");
         require(assetTokenAddress != address(0), "ASSET_ZERO");
         require(baseTokenAddress != address(0), "BASE_ZERO");
+        require(kycAddress != address(0), "KYC_ZERO");
 
         __AccessControl_init();
 
@@ -43,6 +57,7 @@ contract AssetPool is Initializable, AccessControlUpgradeable {
         router = IUniswapV2Router02(routerAddress);
         assetToken = assetTokenAddress;
         baseToken = baseTokenAddress;
+        kyc = IKYC(kycAddress);
     }
 
     function setLpToken(address lpTokenAddress) external onlyRole(ADMIN_ROLE) {
@@ -51,13 +66,24 @@ contract AssetPool is Initializable, AccessControlUpgradeable {
         emit LpTokenSet(lpTokenAddress);
     }
 
+    function setKyc(address kycAddress) external onlyRole(ADMIN_ROLE) {
+        require(kycAddress != address(0), "KYC_ZERO");
+        kyc = IKYC(kycAddress);
+        emit KycUpdated(kycAddress);
+    }
+
+    function setKycRequired(bool required) external onlyRole(ADMIN_ROLE) {
+        kycRequired = required;
+        emit KycRequiredUpdated(required);
+    }
+
     function addLiquidity(
         uint256 amountAssetDesired,
         uint256 amountBaseDesired,
         uint256 amountAssetMin,
         uint256 amountBaseMin,
         uint256 deadline
-    ) external returns (uint256 amountAsset, uint256 amountBase, uint256 liquidity) {
+    ) external onlyVerified returns (uint256 amountAsset, uint256 amountBase, uint256 liquidity) {
         IERC20(assetToken).transferFrom(msg.sender, address(this), amountAssetDesired);
         IERC20(baseToken).transferFrom(msg.sender, address(this), amountBaseDesired);
 
@@ -83,7 +109,7 @@ contract AssetPool is Initializable, AccessControlUpgradeable {
         uint256 amountAssetMin,
         uint256 amountBaseMin,
         uint256 deadline
-    ) external returns (uint256 amountAsset, uint256 amountBase) {
+    ) external onlyVerified returns (uint256 amountAsset, uint256 amountBase) {
         require(lpToken != address(0), "LP_NOT_SET");
         IERC20(lpToken).transferFrom(msg.sender, address(this), liquidity);
         IERC20(lpToken).approve(address(router), liquidity);
@@ -101,7 +127,7 @@ contract AssetPool is Initializable, AccessControlUpgradeable {
         emit LiquidityRemoved(msg.sender, amountAsset, amountBase);
     }
 
-    function swapAssetForBase(uint256 amountIn, uint256 amountOutMin, uint256 deadline) external returns (uint256 amountOut) {
+    function swapAssetForBase(uint256 amountIn, uint256 amountOutMin, uint256 deadline) external onlyVerified returns (uint256 amountOut) {
         IERC20(assetToken).transferFrom(msg.sender, address(this), amountIn);
         IERC20(assetToken).approve(address(router), amountIn);
 
@@ -121,7 +147,7 @@ contract AssetPool is Initializable, AccessControlUpgradeable {
         emit Swap(msg.sender, assetToken, amountIn, amountOut);
     }
 
-    function swapBaseForAsset(uint256 amountIn, uint256 amountOutMin, uint256 deadline) external returns (uint256 amountOut) {
+    function swapBaseForAsset(uint256 amountIn, uint256 amountOutMin, uint256 deadline) external onlyVerified returns (uint256 amountOut) {
         IERC20(baseToken).transferFrom(msg.sender, address(this), amountIn);
         IERC20(baseToken).approve(address(router), amountIn);
 
