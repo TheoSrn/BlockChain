@@ -6,59 +6,89 @@
  */
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { WalletButton } from '@/components/web3/WalletButton';
+import { Sidebar } from './Sidebar';
 
 export function Header() {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
   return (
-    <header className="border-b border-gray-800 bg-black/50 backdrop-blur-xl">
-      <div className="container mx-auto px-4 py-4">
-        <div className="flex items-center justify-between">
-          {/* Logo */}
-          <Link href="/" className="flex items-center space-x-2">
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500" />
-            <span className="text-xl font-bold text-white">
-              RWA Platform
-            </span>
-          </Link>
+    <>
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      
+      <header className="border-b border-gray-800 bg-black/50 backdrop-blur-xl">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            {/* Menu Hamburger + Logo */}
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                className="text-gray-300 hover:text-white transition-colors p-2 hover:bg-gray-800 rounded-lg"
+                aria-label="Open menu"
+              >
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 6h16M4 12h16M4 18h16"
+                  />
+                </svg>
+              </button>
+              
+              <Link href="/" className="flex items-center space-x-2">
+                <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500" />
+                <span className="text-xl font-bold text-white">
+                  RWA Platform
+                </span>
+              </Link>
+            </div>
 
-          {/* Navigation */}
-          <nav className="hidden md:flex items-center space-x-6">
-            <Link
-              href="/dashboard"
-              className="text-gray-300 hover:text-white transition-colors"
-            >
-              Dashboard
-            </Link>
-            <Link
-              href="/assets"
-              className="text-gray-300 hover:text-white transition-colors"
-            >
-              Assets
-            </Link>
-            <Link
-              href="/portfolio"
-              className="text-gray-300 hover:text-white transition-colors"
-            >
-              Portfolio
-            </Link>
-            <Link
-              href="/trade"
-              className="text-gray-300 hover:text-white transition-colors"
-            >
-              Trade
-            </Link>
-            <Link
-              href="/kyc"
-              className="text-gray-300 hover:text-white transition-colors"
-            >
-              KYC
-            </Link>
-          </nav>
+            {/* Navigation - cachée sur mobile */}
+            <nav className="hidden md:flex items-center space-x-6">
+              <Link
+                href="/dashboard"
+                className="text-gray-300 hover:text-white transition-colors"
+              >
+                Dashboard
+              </Link>
+              <Link
+                href="/assets"
+                className="text-gray-300 hover:text-white transition-colors"
+              >
+                Assets
+              </Link>
+              <Link
+                href="/portfolio"
+                className="text-gray-300 hover:text-white transition-colors"
+              >
+                Portfolio
+              </Link>
+              <Link
+                href="/trade"
+                className="text-gray-300 hover:text-white transition-colors"
+              >
+                Trade
+              </Link>
+              <Link
+                href="/kyc"
+                className="text-gray-300 hover:text-white transition-colors"
+              >
+                KYC
+              </Link>
+            </nav>
 
-          {/* Wallet Connection avec statut KYC intégré */}
-          <WalletButton />
+            {/* Wallet Connection avec statut KYC intégré */}
+            <WalletButton />
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+    </>
   );
 }
