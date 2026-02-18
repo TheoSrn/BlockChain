@@ -4,12 +4,57 @@
  */
 
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
-import { http } from 'viem';
+import { fallback, http } from 'viem';
 import { sepolia, mainnet, polygon, optimism, arbitrum, hardhat } from 'wagmi/chains';
 
 const chainId = Number(process.env.NEXT_PUBLIC_CHAIN_ID || '31337');
+const defaultSepoliaRpc = 'https://ethereum-sepolia-rpc.publicnode.com';
+type EnabledChains =
+  | readonly [typeof sepolia]
+  | readonly [typeof hardhat]
+  | readonly [
+      typeof sepolia,
+      typeof mainnet,
+      typeof polygon,
+      typeof optimism,
+      typeof arbitrum,
+    ];
 
-const enabledChains = (() => {
+function getSepoliaRpcUrl() {
+  const envUrl = process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL;
+  if (!envUrl) return defaultSepoliaRpc;
+
+  try {
+    const parsed = new URL(envUrl);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return envUrl;
+    }
+  } catch {
+    return defaultSepoliaRpc;
+  }
+
+  return defaultSepoliaRpc;
+}
+
+function getSepoliaTransport() {
+  const envUrl = process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL;
+  if (!envUrl) {
+    return http(defaultSepoliaRpc);
+  }
+
+  try {
+    const parsed = new URL(envUrl);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return fallback([http(envUrl), http(defaultSepoliaRpc)]);
+    }
+  } catch {
+    return http(defaultSepoliaRpc);
+  }
+
+  return http(defaultSepoliaRpc);
+}
+
+const enabledChains: EnabledChains = (() => {
   if (chainId === 11155111) return [sepolia];
   if (chainId === 31337) return [hardhat];
   return [sepolia, mainnet, polygon, optimism, arbitrum];
@@ -22,7 +67,7 @@ export const config = getDefaultConfig({
   chains: enabledChains,
   transports: {
     [hardhat.id]: http(process.env.NEXT_PUBLIC_LOCAL_RPC_URL || 'http://127.0.0.1:8545'),
-    [sepolia.id]: http(process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL || 'https://rpc.sepolia.org'),
+    [sepolia.id]: getSepoliaTransport(),
     [mainnet.id]: http(process.env.NEXT_PUBLIC_MAINNET_RPC_URL || 'https://eth.llamarpc.com'),
     [polygon.id]: http('https://polygon-rpc.com'),
     [optimism.id]: http('https://mainnet.optimism.io'),

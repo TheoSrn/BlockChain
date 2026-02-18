@@ -6,7 +6,9 @@
  */
 
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, useNetwork, useDisconnect } from 'wagmi';
+import { useBalance } from 'wagmi';
+import { sepolia } from 'wagmi/chains';
+import { formatUnits } from 'viem';
 import { useKYCStatus } from '@/hooks/web3/useKYCStatus';
 
 export function WalletButton() {
@@ -119,6 +121,37 @@ function AccountButtonWithKYC({
   openAccountModal: () => void;
 }) {
   const { kycStatus, isLoading } = useKYCStatus();
+  const { data: nativeBalance, isLoading: isBalanceLoading } = useBalance({
+    address: account.address as `0x${string}`,
+    chainId: sepolia.id,
+    query: {
+      refetchInterval: 10000,
+    },
+  });
+
+  const safeDisplayBalance = (() => {
+    if (nativeBalance?.value !== undefined) {
+      const formatted = formatUnits(
+        nativeBalance.value,
+        nativeBalance.decimals ?? 18
+      );
+      const numeric = Number(formatted);
+
+      if (!Number.isNaN(numeric)) {
+        return `${numeric.toFixed(4).replace(/\.?0+$/, '')} ${nativeBalance.symbol || 'ETH'}`;
+      }
+    }
+
+    if (isBalanceLoading) {
+      return 'Loading Sepolia ETH...';
+    }
+
+    if (account.displayBalance && !account.displayBalance.includes('NaN')) {
+      return account.displayBalance;
+    }
+
+    return '0 ETH';
+  })();
 
   return (
     <button
@@ -140,11 +173,7 @@ function AccountButtonWithKYC({
         <span className="text-sm font-semibold text-white">
           {account.displayName}
         </span>
-        {account.displayBalance && (
-          <span className="text-xs text-gray-400">
-            {account.displayBalance}
-          </span>
-        )}
+        <span className="text-xs text-gray-400">{safeDisplayBalance}</span>
       </div>
     </button>
   );

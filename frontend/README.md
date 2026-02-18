@@ -2,7 +2,7 @@
 
 ## 📋 Présentation du Projet
 
-Cette application frontend constitue l'interface utilisateur d'une plateforme de tokenisation d'actifs sur blockchain Ethereum. Elle permet aux utilisateurs de tokeniser des actifs réels (immobilier, œuvres d'art, véhicules) sous forme de tokens ERC20 et NFTs ERC721, tout en respectant les exigences réglementaires KYC/AML.
+Cette application frontend constitue l'interface utilisateur d'une plateforme de tokenisation d'actifs sur blockchain Ethereum. Elle permet aux utilisateurs de tokeniser des actifs réels (immobilier) sous forme de tokens ERC20 et NFTs ERC721, tout en respectant les exigences réglementaires KYC/AML.
 
 ### Objectifs
 
