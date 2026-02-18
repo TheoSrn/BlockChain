@@ -167,6 +167,7 @@ export class IndexerSyncService {
       contractAddress?: string;
       eventType?: EventType;
       limit?: number;
+      signal?: AbortSignal;
     }
   ): Promise<BlockchainEvent[]> {
     try {
@@ -179,7 +180,7 @@ export class IndexerSyncService {
       if (filters?.limit) params.append('limit', filters.limit.toString());
 
       const url = `${baseUrl}?${params.toString()}`;
-      const response = await fetch(url);
+      const response = await fetch(url, { signal: filters?.signal });
 
       if (!response.ok) {
         if (response.status === 404 || response.status === 503) {

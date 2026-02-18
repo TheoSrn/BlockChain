@@ -146,6 +146,12 @@ NEXT_PUBLIC_UNISWAP_V2_FACTORY=0x...
 # Indexer backend pour récupération d'événements
 NEXT_PUBLIC_INDEXER_URL=http://localhost:8080/graphql
 
+# ============================================================================
+# ETHERSCAN API (Historique complet des transactions)
+# ============================================================================
+# Créez une clé sur : https://etherscan.io/myapikey
+ETHERSCAN_API_KEY=your_etherscan_api_key
+
 # RPC endpoints (avec CORS activé)
 NEXT_PUBLIC_SEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
 NEXT_PUBLIC_MAINNET_RPC_URL=https://cloudflare-eth.com
@@ -177,6 +183,12 @@ NEXT_PUBLIC_ADMIN_DEV_MODE=true
 3. **Sepolia Testnet ETH** :
    - Obtenir des ETH de test sur https://sepoliafaucet.com/
    - Ou https://www.infura.io/faucet/sepolia
+
+4. **Historique complet des transactions (Etherscan)** :
+   - Créer une clé API : https://etherscan.io/myapikey
+   - Ajouter `ETHERSCAN_API_KEY` dans `.env.local`
+   - Redémarrer `npm run dev`
+   - La page Transactions utilise automatiquement l'adresse du wallet connecté
 
 ---
 
