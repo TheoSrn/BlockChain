@@ -65,6 +65,7 @@ export default function KYCPage() {
         formData.documentType,
         formData.documentNumber,
       ],
+      gas: 500000n, // Limite de gas appropriée pour Sepolia
     });
   };
 

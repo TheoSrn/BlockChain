@@ -42,6 +42,7 @@ export default function KYCPendingPage() {
       abi: kycABI,
       functionName: 'approveKYC',
       args: [userAddress as `0x${string}`],
+      gas: 300000n,
     });
   };
 
@@ -51,6 +52,7 @@ export default function KYCPendingPage() {
       abi: kycABI,
       functionName: 'rejectKYC',
       args: [userAddress as `0x${string}`],
+      gas: 300000n,
     });
   };
 
