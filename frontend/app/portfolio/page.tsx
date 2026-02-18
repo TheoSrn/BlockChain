@@ -12,7 +12,7 @@ export default function PortfolioPage() {
 
   if (!isConnected) {
     return (
-      <div className="container mx-auto px-4 py-12">
+      <div className="page-readable container mx-auto px-4 py-12">
         <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-12 text-center">
           <h2 className="mb-4 text-2xl font-bold text-white">
             Connect Your Wallet
@@ -26,7 +26,7 @@ export default function PortfolioPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-12">
+    <div className="page-readable container mx-auto px-4 py-12">
       <div className="mb-8">
         <h1 className="mb-2 text-4xl font-bold text-white">My Portfolio</h1>
         <p className="text-sm text-gray-400">

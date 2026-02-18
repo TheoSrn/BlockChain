@@ -24,3 +24,86 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.page-readable {
+  color: rgb(243 244 246) !important;
+}
+
+.page-readable .bg-white {
+  background-color: rgb(17 24 39 / 0.72) !important;
+  color: rgb(243 244 246) !important;
+  border-color: rgb(55 65 81) !important;
+}
+
+.page-readable .bg-gray-50 {
+  background-color: rgb(31 41 55 / 0.72) !important;
+}
+
+.page-readable .bg-gray-100 {
+  background-color: rgb(31 41 55) !important;
+}
+
+.page-readable .bg-blue-50,
+.page-readable .bg-green-50,
+.page-readable .bg-red-50,
+.page-readable .bg-yellow-50,
+.page-readable .bg-purple-50 {
+  background-color: rgb(17 24 39 / 0.85) !important;
+}
+
+.page-readable .from-blue-50,
+.page-readable .from-green-50,
+.page-readable .from-red-50,
+.page-readable .from-yellow-50,
+.page-readable .from-purple-50,
+.page-readable .via-purple-50,
+.page-readable .to-blue-50,
+.page-readable .to-purple-50,
+.page-readable .to-pink-50,
+.page-readable .to-teal-50 {
+  --tw-gradient-from: rgb(17 24 39 / 0.95) var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: rgb(17 24 39 / 0.55) var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+
+.page-readable .border,
+.page-readable .border-gray-200,
+.page-readable .border-gray-300 {
+  border-color: rgb(55 65 81) !important;
+}
+
+.page-readable .text-gray-900,
+.page-readable .text-gray-800,
+.page-readable .text-gray-700 {
+  color: rgb(243 244 246) !important;
+}
+
+.page-readable .text-gray-600 {
+  color: rgb(209 213 219) !important;
+}
+
+.page-readable .text-gray-500,
+.page-readable .text-gray-400 {
+  color: rgb(156 163 175) !important;
+}
+
+.page-readable input,
+.page-readable textarea,
+.page-readable select {
+  background-color: rgb(17 24 39) !important;
+  color: rgb(243 244 246) !important;
+  border-color: rgb(55 65 81) !important;
+}
+
+.page-readable thead.bg-gray-50 {
+  background-color: rgb(31 41 55 / 0.82) !important;
+}
+
+.page-readable tbody.divide-y,
+.page-readable .divide-y {
+  border-color: rgb(55 65 81) !important;
+}
+
+.page-readable tr:hover {
+  background-color: rgb(31 41 55 / 0.72) !important;
+}

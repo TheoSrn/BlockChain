@@ -14,7 +14,7 @@ export default function TransactionsPage() {
   ];
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="page-readable container mx-auto px-4 py-8">
       <h1 className="text-4xl font-bold mb-8">Transaction History</h1>
 
       {!isConnected ? (

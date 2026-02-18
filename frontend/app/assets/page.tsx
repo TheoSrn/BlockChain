@@ -9,7 +9,7 @@ export default function AssetsPage() {
   const { assets, isLoading, assetCount } = useFactoryAssets();
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="page-readable container mx-auto px-4 py-8">
       <div className="mb-8 flex justify-between items-center">
         <div>
           <h1 className="text-4xl font-bold mb-2">Tokenized Assets</h1>

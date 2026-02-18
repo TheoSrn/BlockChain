@@ -9,7 +9,7 @@ export default function SettingsPage() {
   const [twoFactor, setTwoFactor] = useState(false);
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <div className="page-readable container mx-auto px-4 py-8 max-w-4xl">
       <h1 className="text-4xl font-bold mb-8">Settings</h1>
 
       {!isConnected ? (

@@ -99,7 +99,7 @@ export default function OraclePage() {
   }, [availableAssets]);
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="page-readable container mx-auto px-4 py-8">
       {/* Header with Oracle Information */}
       <div className="mb-8">
         <div className="flex items-start justify-between mb-4">

@@ -59,7 +59,7 @@ export default function TradePage() {
 
   if (!isConnected) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="page-readable container mx-auto px-4 py-8">
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-12 text-center">
           <h2 className="mb-4 text-2xl font-bold text-gray-800">Connect Your Wallet</h2>
           <p className="text-gray-600">Please connect your wallet to start trading</p>
@@ -72,7 +72,7 @@ export default function TradePage() {
   const canTrade = true; // kycStatus?.canTrade ?? false;
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="page-readable container mx-auto px-4 py-8">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-4xl font-bold mb-2">Trade</h1>
