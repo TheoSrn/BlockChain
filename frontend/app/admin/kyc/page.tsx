@@ -10,8 +10,10 @@ import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagm
 import { parseAbiItem } from 'viem';
 import { kycABI } from '@/abi/KYC';
 import { KYCStatusBadge } from '@/components/web3/KYCStatus';
+import { CONTRACT_ADDRESSES } from '@/config/contracts';
 
-const KYC_CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_KYC_ADDRESS || '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512') as const;
+// Adresse du contrat KYC depuis la config centralisée
+const KYC_CONTRACT_ADDRESS = CONTRACT_ADDRESSES.KYC_MANAGER as `0x${string}`;
 
 export default function KYCAdminPage() {
   const { address } = useAccount();

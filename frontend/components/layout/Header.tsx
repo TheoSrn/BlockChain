@@ -6,12 +6,40 @@
  */
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { WalletButton } from '@/components/web3/WalletButton';
 import { Sidebar } from './Sidebar';
 
 export function Header() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  // Éviter les erreurs d'hydratation en ne montant le composant que côté client
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    // Rendu minimal pendant le SSR
+    return (
+      <header className="border-b border-gray-800 bg-black/50 backdrop-blur-xl">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="w-6 h-6" /> {/* Placeholder pour le hamburger */}
+              <Link href="/" className="flex items-center space-x-2">
+                <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500" />
+                <span className="text-xl font-bold text-white">
+                  RWA Platform
+                </span>
+              </Link>
+            </div>
+            <div className="h-10 w-32" /> {/* Placeholder pour le wallet button */}
+          </div>
+        </div>
+      </header>
+    );
+  }
 
   return (
     <>

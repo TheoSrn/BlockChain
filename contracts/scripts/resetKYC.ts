@@ -1,8 +1,14 @@
 import { ethers } from "hardhat";
+import * as dotenv from "dotenv";
+import * as path from "path";
+
+// Charger les adresses depuis frontend/.env.local
+const frontendEnvPath = path.join(__dirname, "../../frontend/.env.local");
+dotenv.config({ path: frontendEnvPath });
 
 /**
  * Script pour retirer un compte de la whitelist KYC
- * Usage: npx hardhat run scripts/resetKYC.ts --network localhost
+ * Usage: npx hardhat run scripts/resetKYC.ts --network sepolia
  */
 
 async function main() {
@@ -11,11 +17,14 @@ async function main() {
   const [deployer] = await ethers.getSigners();
   console.log("Admin address:", deployer.address);
 
-  // L'adresse à retirer de la whitelist
-  const userAddress = "0xA24a49D62C3Dc81a9BADC056dc69a1B386593FcF"; // Votre adresse
+  // Lire l'adresse depuis le .env.local du frontend
+  const userAddress = deployer.address;
+  const kycAddress = process.env.NEXT_PUBLIC_KYC_ADDRESS;
   
-  // Adresse du contrat KYC
-  const kycAddress = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+  if (!kycAddress) {
+    console.error("❌ NEXT_PUBLIC_KYC_ADDRESS not found in frontend/.env.local");
+    process.exit(1);
+  }
   
   console.log("Target user address:", userAddress);
   console.log("KYC contract:", kycAddress);

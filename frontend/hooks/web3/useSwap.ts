@@ -1,3 +1,17 @@
+/**
+ * useSwap Hook - Uniswap V2 Integration
+ * 
+ * ⚠️ IMPORTANT: KYC VERIFICATION REQUIRED
+ * 
+ * This hook interacts with Uniswap V2 Router which does NOT enforce KYC on-chain.
+ * YOU MUST verify the user is whitelisted BEFORE calling swap/liquidity functions.
+ * 
+ * Use useKYCStatus() hook to check if user.canTrade === true before trading.
+ * 
+ * For on-chain KYC enforcement, use AssetERC20 tokens which have built-in KYC checks
+ * or create a custom TradingPool contract with KYC verification.
+ */
+
 import { useState, useEffect } from 'react';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { parseUnits, formatUnits, Address } from 'viem';
@@ -59,6 +73,16 @@ const UNISWAP_V2_FACTORY_ABI = [
     name: 'getPair',
     outputs: [{ name: 'pair', type: 'address' }],
     stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: 'tokenA', type: 'address' },
+      { name: 'tokenB', type: 'address' },
+    ],
+    name: 'createPair',
+    outputs: [{ name: 'pair', type: 'address' }],
+    stateMutability: 'nonpayable',
     type: 'function',
   },
 ] as const;
@@ -213,6 +237,12 @@ export function useSwapWrite() {
   const { writeContract, data: hash, isPending, error } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
+  /**
+   * ⚠️ WARNING: This function does NOT verify KYC on-chain
+   * Uniswap V2 Router does not have KYC verification built-in
+   * Always verify user is whitelisted BEFORE calling this function
+   * Use useKYCStatus hook to check canTrade status
+   */
   const approveToken = (tokenAddress: Address, amount: string, decimals: number = 18) => {
     writeContract({
       address: tokenAddress,
@@ -222,6 +252,12 @@ export function useSwapWrite() {
     });
   };
 
+  /**
+   * ⚠️ WARNING: This function does NOT verify KYC on-chain
+   * Uniswap V2 Router does not have KYC verification built-in
+   * Always verify user is whitelisted BEFORE calling this function
+   * Use useKYCStatus hook to check canTrade status
+   */
   const executeSwap = (
     tokenIn: Address,
     tokenOut: Address,
@@ -244,9 +280,16 @@ export function useSwapWrite() {
         userAddress,
         deadline,
       ],
+      gas: BigInt(300000), // Limite de gas explicite
     });
   };
 
+  /**
+   * ⚠️ WARNING: This function does NOT verify KYC on-chain
+   * Uniswap V2 Router does not have KYC verification built-in
+   * Always verify user is whitelisted BEFORE calling this function
+   * Use useKYCStatus hook to check canTrade status
+   */
   const addLiquidity = (
     tokenA: Address,
     tokenB: Address,
@@ -259,8 +302,10 @@ export function useSwapWrite() {
   ) => {
     const amountADesired = parseUnits(amountA, decimalsA);
     const amountBDesired = parseUnits(amountB, decimalsB);
-    const amountAMin = (amountADesired * BigInt(100 - slippage)) / BigInt(100);
-    const amountBMin = (amountBDesired * BigInt(100 - slippage)) / BigInt(100);
+    // Convert slippage percentage to basis points (0.5% -> 50 bps)
+    const slippageBps = Math.floor(slippage * 100);
+    const amountAMin = (amountADesired * BigInt(10000 - slippageBps)) / BigInt(10000);
+    const amountBMin = (amountBDesired * BigInt(10000 - slippageBps)) / BigInt(10000);
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20);
 
     writeContract({
@@ -268,6 +313,21 @@ export function useSwapWrite() {
       abi: UNISWAP_V2_ROUTER_ABI,
       functionName: 'addLiquidity',
       args: [tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, userAddress, deadline],
+      gas: BigInt(500000), // Limite de gas explicite pour éviter l'erreur "gas limit too high"
+    });
+  };
+
+  /**
+   * Create a new liquidity pool pair on Uniswap V2
+   * Calls Factory.createPair(tokenA, tokenB)
+   */
+  const createPool = (tokenA: Address, tokenB: Address) => {
+    writeContract({
+      address: UNISWAP_V2_FACTORY as Address,
+      abi: UNISWAP_V2_FACTORY_ABI,
+      functionName: 'createPair',
+      args: [tokenA, tokenB],
+      gas: BigInt(5000000), // Création de pool nécessite plus de gas
     });
   };
 
@@ -275,6 +335,7 @@ export function useSwapWrite() {
     approveToken,
     executeSwap,
     addLiquidity,
+    createPool,
     hash,
     isPending,
     isConfirming,

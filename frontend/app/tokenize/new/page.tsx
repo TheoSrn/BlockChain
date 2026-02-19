@@ -24,10 +24,16 @@ export default function NewTokenizePage() {
     name: '',
     symbol: '',
     assetType: '',
+    city: '',
+    country: '',
     totalSupply: '',
     valueUSD: '',
     description: '',
+    imageUrl: '',
+    surface: '',
+    rooms: '',
   });
+  const [imageStatus, setImageStatus] = useState<'loading' | 'success' | 'error' | 'idle'>('idle');
 
   if (!isConnected) {
     return (
@@ -53,10 +59,13 @@ export default function NewTokenizePage() {
       return;
     }
 
-    if (!formData.name || !formData.symbol || !formData.totalSupply || !formData.valueUSD) {
+    if (!formData.name || !formData.symbol || !formData.totalSupply || !formData.valueUSD || !formData.city || !formData.country) {
       alert('Please fill all required fields');
       return;
     }
+
+    // Créer la localisation
+    const location = `${formData.city}, ${formData.country}`;
 
     writeContract({
       address: factoryAddress,
@@ -69,13 +78,14 @@ export default function NewTokenizePage() {
         `${formData.symbol.toUpperCase()}NFT`,
         address,
         parseUnits(formData.totalSupply, 18),
-        formData.assetType || 'UNKNOWN',
-        BigInt(0),
+        location, // Ville, Pays
+        BigInt(formData.surface || '0'),
         BigInt(formData.valueUSD || '0'),
-        formData.description || '',
-        '',
-        '',
+        formData.rooms ? `${formData.description}${formData.description ? ' | ' : ''}${formData.rooms} rooms` : formData.description || '',
+        formData.assetType || '', // Type d'actif dans documents
+        formData.imageUrl || '', // tokenUri - l'image va ici!
       ],
+      gas: BigInt(15000000), // Limite de gas sûre pour Sepolia
     });
   };
 
@@ -165,6 +175,42 @@ export default function NewTokenizePage() {
                   </div>
                 </div>
 
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm text-gray-400">
+                      City *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.city}
+                      onChange={(e) =>
+                        setFormData({ ...formData, city: e.target.value })
+                      }
+                      placeholder="Paris"
+                      className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
+                      required
+                      disabled={!canTokenize}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm text-gray-400">
+                      Country *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.country}
+                      onChange={(e) =>
+                        setFormData({ ...formData, country: e.target.value })
+                      }
+                      placeholder="France"
+                      className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
+                      required
+                      disabled={!canTokenize}
+                    />
+                  </div>
+                </div>
+
                 <div>
                   <label className="mb-2 block text-sm text-gray-400">
                     Description
@@ -179,6 +225,94 @@ export default function NewTokenizePage() {
                     className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
                     disabled={!canTokenize}
                   />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm text-gray-400">
+                    Image URL
+                  </label>
+                  <input
+                    type="url"
+                    value={formData.imageUrl}
+                    onChange={(e) => {
+                      setFormData({ ...formData, imageUrl: e.target.value });
+                      setImageStatus('idle');
+                    }}
+                    placeholder="https://example.com/asset-image.jpg"
+                    className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
+                    disabled={!canTokenize}
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    💡 Recommandé : téléchargez votre image sur <a href="https://imgur.com/upload" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline">imgur.com</a> pour un lien fiable
+                  </p>
+                  {formData.imageUrl && (
+                    <div className="mt-3">
+                      <p className="mb-2 text-xs text-gray-400">Aperçu de l'image :</p>
+                      <div className="relative h-64 w-full overflow-hidden rounded-lg border border-gray-700 bg-gray-800">
+                        {imageStatus === 'loading' && (
+                          <div className="flex h-full items-center justify-center">
+                            <p className="text-sm text-gray-400">Chargement...</p>
+                          </div>
+                        )}
+                        {imageStatus === 'error' && (
+                          <div className="flex h-full items-center justify-center p-4 text-center">
+                            <div>
+                              <p className="text-sm text-red-400">❌ Impossible de charger l'image</p>
+                              <p className="mt-2 text-xs text-gray-500">
+                                Ce site bloque l'affichage de ses images ailleurs. <br />
+                                Téléchargez l'image et uploadez-la sur <a href="https://imgur.com/upload" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline">Imgur</a> (gratuit).
+                              </p>
+                              <p className="mt-3 text-xs text-purple-400">
+                                ℹ️ L'URL sera quand même enregistrée avec l'actif
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                        <img
+                          src={formData.imageUrl}
+                          alt="Asset preview"
+                          className={`h-full w-full object-contain ${imageStatus === 'success' ? 'block' : 'hidden'}`}
+                          onLoad={() => setImageStatus('success')}
+                          onError={() => setImageStatus('error')}
+                          onLoadStart={() => setImageStatus('loading')}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm text-gray-400">
+                      Surface (m²)
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.surface}
+                      onChange={(e) =>
+                        setFormData({ ...formData, surface: e.target.value })
+                      }
+                      placeholder="150"
+                      className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
+                      disabled={!canTokenize}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm text-gray-400">
+                      Number of Rooms
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.rooms}
+                      onChange={(e) =>
+                        setFormData({ ...formData, rooms: e.target.value })
+                      }
+                      placeholder="5"
+                      className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
+                      disabled={!canTokenize}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -233,8 +367,26 @@ export default function NewTokenizePage() {
 
             {txHash ? (
               <div className="rounded-lg border border-blue-500/50 bg-blue-500/10 p-4">
-                <p className="text-sm text-blue-400">
-                  Transaction: {txHash.slice(0, 10)}...{txHash.slice(-8)}
+                <p className="mb-2 text-sm font-semibold text-blue-400">Transaction envoyée :</p>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={`https://sepolia.etherscan.io/tx/${txHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="break-all text-xs text-blue-300 hover:underline"
+                  >
+                    {txHash}
+                  </a>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(txHash)}
+                    className="rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700"
+                    title="Copier"
+                  >
+                    📋
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-blue-300">
+                  {isConfirming ? '⏳ En attente de confirmation...' : '✅ Voir sur Etherscan (cliquez le lien)'}
                 </p>
               </div>
             ) : null}

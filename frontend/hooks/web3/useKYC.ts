@@ -5,9 +5,10 @@
 
 import { useReadContract } from 'wagmi';
 import { kycABI } from '@/abi/KYC';
+import { CONTRACT_ADDRESSES } from '@/config/contracts';
 
-// Adresse du contrat KYC - À mettre à jour après déploiement
-const KYC_CONTRACT_ADDRESS = '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512' as const;
+// Adresse du contrat KYC depuis la config centralisée
+const KYC_CONTRACT_ADDRESS = CONTRACT_ADDRESSES.KYC_MANAGER as `0x${string}`;
 
 export function useKYCStatus(address?: `0x${string}`) {
   const { data: isWhitelisted, isLoading: isLoadingWhitelist } = useReadContract({

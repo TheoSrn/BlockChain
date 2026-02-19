@@ -3,8 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { kycABI } from '@/abi/KYC';
+import { CONTRACT_ADDRESSES } from '@/config/contracts';
 
-const KYC_CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_KYC_ADDRESS || '0x959922bE3CAee4b8Cd9a407cc3ac1C251C2007B1') as const;
+// Adresse du contrat KYC depuis la config centralisée
+const KYC_CONTRACT_ADDRESS = CONTRACT_ADDRESSES.KYC_MANAGER as `0x${string}`;
 
 interface KYCRequest {
   user: string;
