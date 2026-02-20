@@ -1,4 +1,10 @@
 import { ethers } from "hardhat";
+import * as dotenv from "dotenv";
+import * as path from "path";
+
+// Charger les adresses depuis frontend/.env.local
+const frontendEnvPath = path.join(__dirname, "../../frontend/.env.local");
+dotenv.config({ path: frontendEnvPath });
 
 /**
  * Script pour gérer le système KYC
@@ -11,8 +17,15 @@ async function main() {
   const [deployer] = await ethers.getSigners();
   console.log("Managing KYC from:", deployer.address);
 
-  // Adresse du contrat KYC (remplacer par votre adresse après déploiement)
-  const kycAddress = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+  // Adresse du contrat KYC depuis .env.local
+  const kycAddress = process.env.NEXT_PUBLIC_KYC_ADDRESS;
+  
+  if (!kycAddress) {
+    console.error("❌ NEXT_PUBLIC_KYC_ADDRESS not found in frontend/.env.local");
+    process.exit(1);
+  }
+  
+  console.log("KYC Contract:", kycAddress);
   
   // Connecter au contrat KYC
   const KYC = await ethers.getContractFactory("KYC");
@@ -24,10 +37,21 @@ async function main() {
 
   // Exemple d'adresses à whitelister (remplacer par vos adresses)
   const addressesToWhitelist = [
-    "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", // Account #1
-    "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC", // Account #2
-    "0x90F79bf6EB2c4f870365E785982E1f101E93b906", // Account #3
+    "0xA24a49D62C3Dc81a9BADC056dc69a1B386593FcF", // Admin/Deployer Account
+    process.env.NEXT_PUBLIC_PRIMARY_SALE_ADDRESS || "0x63B5969D67B1A7bd21D153D5E07fA171497e735D", // PrimarySale Contract
   ];
+
+  // Adresse à retirer de la whitelist
+  const addressesToUnwhitelist = [
+    "0x17e08dD6C3b78cB618Db025EA3d4868180bb3550"
+  ];
+  // ============================================
+  // UNWHITELIST OPERATIONS
+  // ============================================
+
+  if (addressesToUnwhitelist.length > 0) {
+    await removeFromWhitelist(kycAddress, addressesToUnwhitelist);
+  }
 
   // Exemple d'adresses à blacklister
   const addressesToBlacklist = [

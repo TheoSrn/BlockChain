@@ -8,6 +8,7 @@ import {AssetERC20} from "./assetERC20.sol";
 import {AssetNFT} from "./assetNFT.sol";
 import {AssetPool} from "./AssetPool.sol";
 import {IOracle} from "./interfaces/IOracle.sol";
+import {IKYC} from "./interfaces/IKYC.sol";
 
 contract Factory is AccessControl {
 	bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
@@ -85,7 +86,11 @@ contract Factory is AccessControl {
 		string calldata description,
 		string calldata documents,
 		string calldata tokenUri
-	) external onlyRole(ADMIN_ROLE) returns (uint256 assetId) {
+	) external returns (uint256 assetId) {
+		// Vérifier que l'utilisateur est whitelisté dans le système KYC
+		require(kyc != address(0), "KYC not set");
+		require(IKYC(kyc).isWhitelisted(msg.sender), "Not whitelisted - Complete KYC verification");
+		
 		require(treasury != address(0), "TREASURY_ZERO");
 
 		assetId = ++assetCount;

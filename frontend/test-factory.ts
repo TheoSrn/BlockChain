@@ -3,7 +3,7 @@ import { createPublicClient, http } from 'viem';
 import { sepolia } from 'viem/chains';
 import { FACTORY_ABI } from './abi/Factory';
 
-const FACTORY_ADDRESS = '0x035E8F2533F002492C12486298D5Ff2F07900674';
+const FACTORY_ADDRESS = process.env.NEXT_PUBLIC_ASSET_FACTORY_ADDRESS || '0xb68c1aDBdD1e836deA4681195612b3a9d677c965';
 const RPC_URL = 'https://eth-sepolia.g.alchemy.com/v2/UtllL6v6kMNFiAwAHQ7HU';
 
 async function testFactoryRead() {

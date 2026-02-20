@@ -16,12 +16,241 @@ export default function AssetsPage() {
     !asset.name.toLowerCase().includes('patate')
   );
 
+  // Helper pour extraire le token type du champ documents (format: "DIVISIBLE|USDC" ou "UNIQUE|WETH")
+  const getTokenType = (documents: string) => {
+    if (!documents) return '';
+    // Si c'est le nouveau format avec payment token, extraire la première partie
+    const parts = documents.split('|').map(p => p.trim());
+    const tokenType = parts[0];
+    // Si c'est le nouveau format, retourner directement
+    if (tokenType === 'DIVISIBLE' || tokenType === 'UNIQUE') return tokenType;
+    // Sinon retourner tel quel (ancien format)
+    return documents;
+  };
+
+  // Helper pour extraire le payment token du champ documents
+  const getPaymentToken = (documents: string) => {
+    if (!documents) return '';
+    const parts = documents.split('|').map(p => p.trim());
+    // Si on a au moins 2 parties et que la première est un token type valide
+    if (parts.length >= 2 && (parts[0] === 'DIVISIBLE' || parts[0] === 'UNIQUE')) {
+      return parts[1]; // USDC, USDT, ou WETH
+    }
+    return ''; // Pas de payment token spécifié
+  };
+
+  // Séparer les assets par type
+  const divisibleAssets = filteredAssets.filter(asset => {
+    const tokenType = getTokenType(asset.metadata?.documents || '');
+    return tokenType === 'DIVISIBLE';
+  });
+
+  const uniqueAssets = filteredAssets.filter(asset => {
+    const tokenType = getTokenType(asset.metadata?.documents || '');
+    return tokenType === 'UNIQUE';
+  });
+
+  // Composant de rendu pour une carte d'asset
+  const renderAssetCard = (asset: any) => {
+    const tokenType = getTokenType(asset.metadata?.documents || '');
+    const paymentToken = getPaymentToken(asset.metadata?.documents || '');
+    const isDivisible = tokenType === 'DIVISIBLE';
+    const isUnique = tokenType === 'UNIQUE';
+
+    return (
+      <div key={asset.id.toString()} className="group overflow-hidden rounded-xl border border-gray-800 bg-gray-900/50 transition-all hover:border-purple-500/50 hover:shadow-lg hover:shadow-purple-500/20">
+        {/* Image */}
+        <div className="relative h-56 w-full overflow-hidden bg-gray-800">
+          {asset.imageUrl ? (
+            <img
+              src={asset.imageUrl}
+              alt={asset.name}
+              className="h-full w-full object-cover transition-transform group-hover:scale-105"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+                (e.target as HTMLImageElement).parentElement!.classList.add('flex', 'items-center', 'justify-center');
+              }}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              <div className="text-center text-gray-600">
+                <svg className="mx-auto mb-2 h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <p className="text-sm">No image</p>
+              </div>
+            </div>
+          )}
+          {/* Badge Status */}
+          <div className="absolute right-3 top-3">
+            <span className={`rounded-full px-3 py-1 text-xs font-semibold backdrop-blur-sm ${
+              asset.active
+                ? 'bg-green-500/90 text-white'
+                : 'bg-gray-500/90 text-white'
+            }`}>
+              {asset.active ? 'Active' : 'Inactive'}
+            </span>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-5">
+          <div className="mb-4">
+            <h3 className="mb-2 text-xl font-bold text-white">{asset.name}</h3>
+            
+            {/* Informations rapides */}
+            <div className="flex flex-wrap gap-2 text-xs">
+              <span className="rounded-full bg-purple-500/30 px-2 py-1 font-semibold text-purple-300">
+                {asset.symbol}
+              </span>
+              {asset.metadata && (
+                <>
+                  {asset.metadata.documents && (() => {
+                    const tokenType = getTokenType(asset.metadata.documents);
+                    return (
+                      <>
+                        {tokenType && (
+                          <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                            tokenType === 'DIVISIBLE' 
+                              ? 'bg-blue-500/20 text-blue-300' 
+                              : 'bg-yellow-500/20 text-yellow-300'
+                          }`}>
+                            {tokenType === 'DIVISIBLE' ? '🔹 Divisible' : '💎 Unique NFT'}
+                          </span>
+                        )}
+                      </>
+                    );
+                  })()}
+                  {asset.metadata.location && (
+                    <span className="rounded-full bg-blue-500/20 px-2 py-1 text-blue-300">
+                      📍 {asset.metadata.location}
+                    </span>
+                  )}
+                  {asset.metadata.surface > 0 && (
+                    <span className="rounded-full bg-green-500/20 px-2 py-1 text-green-300">
+                      {asset.metadata.surface.toString()} m²
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Affichage différent selon le type */}
+          {isDivisible ? (
+            // Fractional Properties (DIVISIBLE)
+            <div className="mb-4 space-y-2 border-t border-gray-800 pt-4 text-xs">
+              <div className="flex justify-between items-baseline">
+                <span className="text-gray-500">Your Ownership:</span>
+                <span className="font-mono font-semibold text-purple-300">
+                  {asset.userBalance !== undefined && asset.totalSupply !== undefined ? (
+                    <>
+                      {formatUnits(asset.userBalance, 18)} / {formatUnits(asset.totalSupply, 18)}
+                    </>
+                  ) : (
+                    '-- / --'
+                  )}
+                </span>
+              </div>
+              <div className="flex justify-between items-baseline">
+                <span className="text-gray-500">Token Price:</span>
+                <span className="font-semibold text-blue-400">
+                  {asset.metadata?.estimatedValue ? (
+                    <>
+                      ${Number(asset.metadata.estimatedValue).toLocaleString()}
+                      {paymentToken && (
+                        <span className="ml-1 text-xs text-gray-400">({paymentToken})</span>
+                      )}
+                    </>
+                  ) : (
+                    '$--'
+                  )}
+                </span>
+              </div>
+              <div className="flex justify-between items-baseline">
+                <span className="text-gray-500">Your Share Value:</span>
+                <span className="font-bold text-green-400">
+                  {asset.userBalance !== undefined && asset.metadata?.estimatedValue ? (
+                    `$${(Number(formatUnits(asset.userBalance, 18)) * Number(asset.metadata.estimatedValue)).toFixed(2)}`
+                  ) : (
+                    '$0.00'
+                  )}
+                </span>
+              </div>
+            </div>
+          ) : isUnique ? (
+            // Exclusive Properties (UNIQUE)
+            <div className="mb-4 space-y-2 border-t border-gray-800 pt-4 text-xs">
+              <div className="flex justify-between items-baseline">
+                <span className="text-gray-500">Asset Value:</span>
+                <span className="font-bold text-green-400">
+                  {asset.metadata?.estimatedValue ? (
+                    <>
+                      ${Number(asset.metadata.estimatedValue).toLocaleString()}
+                      {paymentToken && (
+                        <span className="ml-1 text-xs text-gray-400">({paymentToken})</span>
+                      )}
+                    </>
+                  ) : (
+                    '$--'
+                  )}
+                </span>
+              </div>
+              <div className="flex justify-between items-baseline">
+                <span className="text-gray-500">Ownership:</span>
+                <span className={`font-semibold ${
+                  asset.userBalance && asset.userBalance > BigInt(0) 
+                    ? 'text-green-400' 
+                    : 'text-gray-400'
+                }`}>
+                  {asset.userBalance && asset.userBalance > BigInt(0) ? '✓ Owned' : '✗ Not Owned'}
+                </span>
+              </div>
+            </div>
+          ) : (
+            // Fallback pour les anciens assets
+            <div className="mb-4 space-y-2 border-t border-gray-800 pt-4 text-xs">
+              <div className="flex justify-between items-baseline">
+                <span className="text-gray-500">Your Ownership:</span>
+                <span className="font-mono font-semibold text-purple-300">
+                  {asset.userBalance !== undefined && asset.totalSupply !== undefined ? (
+                    <>
+                      {formatUnits(asset.userBalance, 18)} / {formatUnits(asset.totalSupply, 18)}
+                    </>
+                  ) : (
+                    '-- / --'
+                  )}
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <button 
+              onClick={() => setSelectedAsset(asset)}
+              className="flex-1 rounded-lg bg-purple-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-purple-700"
+            >
+              View Details
+            </button>
+            <button className="flex-1 rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700">
+              Trade
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="page-readable container mx-auto px-4 py-8">
       <div className="mb-8 flex justify-between items-center">
         <div>
           <h1 className="text-4xl font-bold text-white mb-2">Tokenized Assets</h1>
-          <p className="text-gray-400">Browse all available tokenized real-world assets on the platform ({filteredAssets.length} displayed)</p>
+          <p className="text-gray-400">
+            {filteredAssets.length} total assets - 
+            <span className="text-blue-400 ml-1">{divisibleAssets.length} fractional</span> & 
+            <span className="text-yellow-400 ml-1">{uniqueAssets.length} exclusive</span>
+          </p>
         </div>
         <Link href="/tokenize/new">
           <button className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors font-semibold">
@@ -48,124 +277,56 @@ export default function AssetsPage() {
           </Link>
         </div>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {filteredAssets.map((asset) => (
-            <div key={asset.id.toString()} className="group overflow-hidden rounded-xl border border-gray-800 bg-gray-900/50 transition-all hover:border-purple-500/50 hover:shadow-lg hover:shadow-purple-500/20">
-              {/* Image */}
-              <div className="relative h-56 w-full overflow-hidden bg-gray-800">
-                {asset.imageUrl ? (
-                  <img
-                    src={asset.imageUrl}
-                    alt={asset.name}
-                    className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                      (e.target as HTMLImageElement).parentElement!.classList.add('flex', 'items-center', 'justify-center');
-                    }}
-                  />
-                ) : (
-                  <div className="flex h-full items-center justify-center">
-                    <div className="text-center text-gray-600">
-                      <svg className="mx-auto mb-2 h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      <p className="text-sm">No image</p>
-                    </div>
-                  </div>
-                )}
-                {/* Badge Status */}
-                <div className="absolute right-3 top-3">
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold backdrop-blur-sm ${
-                    asset.active
-                      ? 'bg-green-500/90 text-white'
-                      : 'bg-gray-500/90 text-white'
-                  }`}>
-                    {asset.active ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
+        <div className="space-y-12">
+          {/* Section Divisible Assets (Shares) */}
+          <div>
+            <div className="mb-6 flex items-center gap-3">
+              <div className="rounded-lg bg-blue-500/10 p-2">
+                <svg className="h-6 w-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
               </div>
-
-              {/* Content */}
-              <div className="p-5">
-                <div className="mb-4">
-                  <h3 className="mb-2 text-xl font-bold text-white">{asset.name}</h3>
-                  
-                  {/* Informations rapides */}
-                  <div className="flex flex-wrap gap-2 text-xs">
-                    <span className="rounded-full bg-purple-500/30 px-2 py-1 font-semibold text-purple-300">
-                      {asset.symbol}
-                    </span>
-                    {asset.metadata && (
-                      <>
-                        {asset.metadata.documents && (
-                          <span className="rounded-full bg-purple-500/20 px-2 py-1 text-purple-300">
-                            {asset.metadata.documents}
-                          </span>
-                        )}
-                        {asset.metadata.location && (
-                          <span className="rounded-full bg-blue-500/20 px-2 py-1 text-blue-300">
-                            📍 {asset.metadata.location}
-                          </span>
-                        )}
-                        {asset.metadata.surface > 0 && (
-                          <span className="rounded-full bg-green-500/20 px-2 py-1 text-green-300">
-                            {asset.metadata.surface.toString()} m²
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mb-4 space-y-2 border-t border-gray-800 pt-4 text-xs">
-                  <div className="flex justify-between items-baseline">
-                    <span className="text-gray-500">Your Ownership:</span>
-                    <span className="font-mono font-semibold text-purple-300">
-                      {asset.userBalance !== undefined && asset.totalSupply !== undefined ? (
-                        <>
-                          {formatUnits(asset.userBalance, 18)} / {formatUnits(asset.totalSupply, 18)}
-                        </>
-                      ) : (
-                        '-- / --'
-                      )}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-baseline">
-                    <span className="text-gray-500">Token Price:</span>
-                    <span className="font-semibold text-blue-400">
-                      {asset.totalSupply && asset.totalSupply > 0n && asset.metadata?.estimatedValue ? (
-                        `$${(Number(asset.metadata.estimatedValue) / Number(formatUnits(asset.totalSupply, 18))).toFixed(2)}`
-                      ) : (
-                        '$--'
-                      )}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-baseline">
-                    <span className="text-gray-500">Your Value:</span>
-                    <span className="font-bold text-green-400">
-                      {asset.userBalance !== undefined && asset.totalSupply !== undefined && asset.totalSupply > 0n && asset.metadata?.estimatedValue ? (
-                        `$${((Number(formatUnits(asset.userBalance, 18)) / Number(formatUnits(asset.totalSupply, 18))) * Number(asset.metadata.estimatedValue)).toFixed(2)}`
-                      ) : (
-                        '$0.00'
-                      )}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => setSelectedAsset(asset)}
-                    className="flex-1 rounded-lg bg-purple-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-purple-700"
-                  >
-                    View Details
-                  </button>
-                  <button className="flex-1 rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700">
-                    Trade
-                  </button>
-                </div>
+              <div>
+                <h2 className="text-2xl font-bold text-white">🏢 Fractional Properties</h2>
+                <p className="text-sm text-gray-400">Real estate divided into tradeable shares (ERC-20) - {divisibleAssets.length} available</p>
               </div>
             </div>
-          ))}
+            
+            {divisibleAssets.length === 0 ? (
+              <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-6 text-center">
+                <p className="text-blue-400">No fractional properties created yet</p>
+              </div>
+            ) : (
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {divisibleAssets.map(renderAssetCard)}
+              </div>
+            )}
+          </div>
+
+          {/* Section Unique NFTs */}
+          <div>
+            <div className="mb-6 flex items-center gap-3">
+              <div className="rounded-lg bg-yellow-500/10 p-2">
+                <svg className="h-6 w-6 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-white">🏡 Exclusive Properties</h2>
+                <p className="text-sm text-gray-400">Whole properties with single ownership (ERC-721) - {uniqueAssets.length} available</p>
+              </div>
+            </div>
+            
+            {uniqueAssets.length === 0 ? (
+              <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-6 text-center">
+                <p className="text-yellow-400">No exclusive properties created yet</p>
+              </div>
+            ) : (
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {uniqueAssets.map(renderAssetCard)}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -241,12 +402,28 @@ export default function AssetsPage() {
                 <div className="mb-8">
                   <h3 className="mb-4 text-xl font-bold text-white">Asset Information</h3>
                   <div className="grid gap-6 md:grid-cols-2">
-                    {selectedAsset.metadata.documents && (
-                      <div className="rounded-lg border border-gray-800 bg-gray-800/50 p-4">
-                        <p className="mb-1 text-sm text-gray-500">Type</p>
-                        <p className="text-lg font-semibold text-white">{selectedAsset.metadata.documents}</p>
-                      </div>
-                    )}
+                    {selectedAsset.metadata.documents && (() => {
+                      const tokenType = getTokenType(selectedAsset.metadata.documents);
+                      return (
+                        <>
+                          {tokenType && (
+                            <div className="rounded-lg border border-gray-800 bg-gray-800/50 p-4">
+                              <p className="mb-1 text-sm text-gray-500">Token Type</p>
+                              <p className={`text-lg font-semibold ${
+                                tokenType === 'DIVISIBLE' ? 'text-blue-400' : 'text-yellow-400'
+                              }`}>
+                                {tokenType === 'DIVISIBLE' ? '🔹 Divisible (ERC-20)' : '💎 Unique NFT (ERC-721)'}
+                              </p>
+                              <p className="mt-1 text-xs text-gray-400">
+                                {tokenType === 'DIVISIBLE' 
+                                  ? 'Can be divided into multiple shares' 
+                                  : 'Single indivisible asset'}
+                              </p>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                     {selectedAsset.metadata.location && (
                       <div className="rounded-lg border border-gray-800 bg-gray-800/50 p-4">
                         <p className="mb-1 text-sm text-gray-500">Location</p>
@@ -261,15 +438,33 @@ export default function AssetsPage() {
                     )}
                     {selectedAsset.metadata.estimatedValue > 0 && (
                       <div className="rounded-lg border border-gray-800 bg-gray-800/50 p-4">
-                        <p className="mb-1 text-sm text-gray-500">Estimated Value</p>
-                        <p className="text-lg font-semibold text-green-400">${selectedAsset.metadata.estimatedValue.toString()} USD</p>
+                        <p className="mb-1 text-sm text-gray-500">Price</p>
+                        <p className="text-lg font-semibold text-green-400">
+                          ${Number(selectedAsset.metadata.estimatedValue).toLocaleString()}
+                          {(() => {
+                            const paymentToken = getPaymentToken(selectedAsset.metadata?.documents || '');
+                            return paymentToken ? (
+                              <span className="ml-2 rounded-full bg-blue-500/20 px-2 py-1 text-xs text-blue-300">
+                                {paymentToken}
+                              </span>
+                            ) : null;
+                          })()}
+                        </p>
+                        {(() => {
+                          const paymentToken = getPaymentToken(selectedAsset.metadata?.documents || '');
+                          return paymentToken ? (
+                            <p className="mt-1 text-xs text-gray-400">
+                              Investors pay in {paymentToken} to purchase tokens
+                            </p>
+                          ) : null;
+                        })()}
                       </div>
                     )}
                   </div>
                   {selectedAsset.metadata.description && (
                     <div className="mt-6 rounded-lg border border-gray-800 bg-gray-800/50 p-4">
                       <p className="mb-2 text-sm text-gray-500">Description</p>
-                      <p className="text-gray-300">{selectedAsset.metadata.description}</p>
+                      <p className="text-gray-300 whitespace-pre-line">{selectedAsset.metadata.description}</p>
                     </div>
                   )}
                 </div>

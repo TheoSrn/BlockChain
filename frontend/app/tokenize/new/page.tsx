@@ -23,11 +23,12 @@ export default function NewTokenizePage() {
   const [formData, setFormData] = useState({
     name: '',
     symbol: '',
-    assetType: '',
+    tokenType: '', // DIVISIBLE ou UNIQUE
     city: '',
     country: '',
     totalSupply: '',
     valueUSD: '',
+    paymentToken: 'USDC', // USDC, USDT, ou WETH
     description: '',
     imageUrl: '',
     surface: '',
@@ -59,13 +60,19 @@ export default function NewTokenizePage() {
       return;
     }
 
-    if (!formData.name || !formData.symbol || !formData.totalSupply || !formData.valueUSD || !formData.city || !formData.country) {
+    if (!formData.name || !formData.symbol || !formData.tokenType || !formData.totalSupply || !formData.valueUSD || !formData.city || !formData.country) {
       alert('Please fill all required fields');
       return;
     }
 
+    // Forcer totalSupply à 1 si UNIQUE
+    const finalSupply = formData.tokenType === 'UNIQUE' ? '1' : formData.totalSupply;
+
     // Créer la localisation
     const location = `${formData.city}, ${formData.country}`;
+
+    // Créer les métadonnées : tokenType|paymentToken
+    const metadata = `${formData.tokenType}|${formData.paymentToken}`;
 
     writeContract({
       address: factoryAddress,
@@ -77,12 +84,12 @@ export default function NewTokenizePage() {
         `${formData.name} NFT`,
         `${formData.symbol.toUpperCase()}NFT`,
         address,
-        parseUnits(formData.totalSupply, 18),
+        parseUnits(finalSupply, 18),
         location, // Ville, Pays
         BigInt(formData.surface || '0'),
         BigInt(formData.valueUSD || '0'),
         formData.rooms ? `${formData.description}${formData.description ? ' | ' : ''}${formData.rooms} rooms` : formData.description || '',
-        formData.assetType || '', // Type d'actif dans documents
+        metadata, // Format: "DIVISIBLE|USDC" ou "UNIQUE|WETH"
         formData.imageUrl || '', // tokenUri - l'image va ici!
       ],
       gas: BigInt(15000000), // Limite de gas sûre pour Sepolia
@@ -154,24 +161,35 @@ export default function NewTokenizePage() {
 
                   <div>
                     <label className="mb-2 block text-sm text-gray-400">
-                      Asset Type *
+                      Token Type * 
+                      <span className="ml-2 text-xs text-gray-500">(How will your asset be tokenized?)</span>
                     </label>
                     <select
-                      value={formData.assetType}
-                      onChange={(e) =>
-                        setFormData({ ...formData, assetType: e.target.value })
-                      }
+                      value={formData.tokenType}
+                      onChange={(e) => {
+                        const newTokenType = e.target.value;
+                        setFormData({ 
+                          ...formData, 
+                          tokenType: newTokenType,
+                          // Si UNIQUE, forcer totalSupply à 1
+                          totalSupply: newTokenType === 'UNIQUE' ? '1' : formData.totalSupply
+                        });
+                      }}
                       className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
                       required
                       disabled={!canTokenize}
                     >
-                      <option value="">Select type...</option>
-                      <option value="REAL_ESTATE">Real Estate</option>
-                      <option value="COMMODITY">Commodity</option>
-                      <option value="EQUITY">Equity</option>
-                      <option value="BOND">Bond</option>
-                      <option value="OTHER">Other</option>
+                      <option value="">Select tokenization type...</option>
+                      <option value="DIVISIBLE">🔹 Divisible Asset (ERC-20) - Multiple shares/parts</option>
+                      <option value="UNIQUE">💎 Unique Asset (NFT) - Single indivisible item</option>
                     </select>
+                    {formData.tokenType && (
+                      <p className="mt-2 text-xs text-gray-500">
+                        {formData.tokenType === 'DIVISIBLE' 
+                          ? '✓ This asset will be divided into multiple tradeable tokens (e.g., real estate shares, company equity)'
+                          : '✓ This asset will be a unique NFT, cannot be divided (e.g., artwork, collectible, diamond)'}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -320,40 +338,71 @@ export default function NewTokenizePage() {
             {/* Tokenomics */}
             <div>
               <h3 className="mb-4 text-lg font-bold text-white">Tokenomics</h3>
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-4">
                 <div>
                   <label className="mb-2 block text-sm text-gray-400">
-                    Total Supply *
+                    Number of Tokens *
+                    {formData.tokenType === 'UNIQUE' && (
+                      <span className="ml-2 text-xs text-purple-400">(Fixed to 1 for unique NFT)</span>
+                    )}
                   </label>
                   <input
                     type="number"
-                    value={formData.totalSupply}
+                    value={formData.tokenType === 'UNIQUE' ? '1' : formData.totalSupply}
                     onChange={(e) =>
                       setFormData({ ...formData, totalSupply: e.target.value })
                     }
-                    placeholder="1000000"
-                    className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
+                    placeholder={formData.tokenType === 'UNIQUE' ? '1 (Unique NFT)' : '1000000'}
+                    className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white focus:border-purple-500 focus:outline-none disabled:opacity-50"
                     required
-                    disabled={!canTokenize}
+                    disabled={!canTokenize || formData.tokenType === 'UNIQUE'}
                   />
+                  {formData.tokenType === 'DIVISIBLE' && (
+                    <p className="mt-1 text-xs text-gray-500">Number of shares/tokens to create</p>
+                  )}
                 </div>
 
-                <div>
-                  <label className="mb-2 block text-sm text-gray-400">
-                    Value (USD) *
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.valueUSD}
-                    onChange={(e) =>
-                      setFormData({ ...formData, valueUSD: e.target.value })
-                    }
-                    placeholder="5000000"
-                    className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
-                    required
-                    disabled={!canTokenize}
-                  />
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="md:col-span-2">
+                    <label className="mb-2 block text-sm text-gray-400">
+                      Price per Token *
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.valueUSD}
+                      onChange={(e) =>
+                        setFormData({ ...formData, valueUSD: e.target.value })
+                      }
+                      placeholder="5000000"
+                      className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
+                      required
+                      disabled={!canTokenize}
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Value per token/share in USD</p>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm text-gray-400">
+                      Payment Currency *
+                    </label>
+                    <select
+                      value={formData.paymentToken}
+                      onChange={(e) =>
+                        setFormData({ ...formData, paymentToken: e.target.value })
+                      }
+                      className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
+                      required
+                      disabled={!canTokenize}
+                    >
+                      <option value="USDC">USDC</option>
+                      <option value="USDT">USDT</option>
+                      <option value="WETH">WETH</option>
+                    </select>
+                  </div>
                 </div>
+                <p className="text-xs text-gray-500">
+                  💰 Investors will pay in {formData.paymentToken || 'the selected currency'} to purchase tokens
+                </p>
               </div>
             </div>
 
