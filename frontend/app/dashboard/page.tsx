@@ -33,8 +33,8 @@ export default function DashboardPage() {
     },
   });
 
-  const assetTokenAddress = assetRecord ? (assetRecord as any[])[2] as string : undefined;
-  const assetNftAddress = assetRecord ? (assetRecord as any[])[1] as string : undefined;
+  const assetTokenAddress = assetRecord ? (assetRecord as any).token as string : undefined;
+  const assetNftAddress = assetRecord ? (assetRecord as any).nft as string : undefined;
 
   // Récupérer les balances des tokens ERC20
   const tokenAddresses = [

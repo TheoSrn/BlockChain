@@ -5,7 +5,7 @@ Smart-contracts (Hardhat) + Next.js frontend. Follow the steps below to deploy c
 ## Project Structure
 - contracts/ : Solidity smart contracts + Hardhat config + deploy scripts
 - frontend/  : Next.js app (UI, hooks, services)
-- indexer/   : Optional indexer (placeholder in this repo)
+- indexer/   : On-chain event indexer (REST + WebSocket)
 - backend/   : Optional backend (currently empty)
 - docs/      : Documentation
 
@@ -115,8 +115,21 @@ await kyc.setBlacklisted("0xYOUR_WALLET", false);
 Note: the caller must have the KYC admin role (usually the deployer).
 
 ## Notes
-- backend/ and indexer/ are placeholders in this repo.
+- backend/ is currently a placeholder.
 - If you change Hardhat config, restart the local node.
+
+## 5) Start the Indexer (On-Chain Events Sync)
+
+```powershell
+cd BlockChain\indexer
+npm install
+copy .env.example .env
+npm run dev
+```
+
+Default endpoints:
+- REST: `http://localhost:8080/events`
+- WS: `ws://localhost:8080/events/stream`
 
 ## Troubleshooting
 - HH1006: Make sure Solidity files are in contracts/ and dependencies installed.
