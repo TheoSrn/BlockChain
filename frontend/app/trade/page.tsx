@@ -324,6 +324,7 @@ function SwapTab({ canTrade, userAddress }: { canTrade: boolean; userAddress: st
     priceImpact,
     pairAddress,
     needsApproval,
+    refetchAllowance,
     canTrade: canTradeOnChain,
     tradingPoolAddress,
   } = useTradingPool(
@@ -351,6 +352,18 @@ function SwapTab({ canTrade, userAddress }: { canTrade: boolean; userAddress: st
     refetchBalanceIn();
     refetchBalanceOut();
   }, [tokenInAddress, tokenOutAddress, refetchBalanceIn, refetchBalanceOut]);
+
+  // Refetch balances and allowance when transaction succeeds
+  useEffect(() => {
+    if (isSuccess) {
+      console.log('✅ Transaction successful! Refreshing data...');
+      setTimeout(() => {
+        refetchBalanceIn();
+        refetchBalanceOut();
+        refetchAllowance(); // Refetch allowance after approval
+      }, 2000); // Wait 2s for blockchain to confirm
+    }
+  }, [isSuccess, refetchBalanceIn, refetchBalanceOut, refetchAllowance]);
 
   // Debug logging
   useEffect(() => {
@@ -721,7 +734,7 @@ function LiquidityTab({ canTrade, userAddress }: { canTrade: boolean; userAddres
   });
 
   // Lire les balances
-  const { data: balanceA, isLoading: isLoadingBalanceA } = useReadContract({
+  const { data: balanceA, isLoading: isLoadingBalanceA, refetch: refetchBalanceA } = useReadContract({
     address: tokenAAddress,
     abi: ERC20_ABI,
     functionName: 'balanceOf',
@@ -732,7 +745,7 @@ function LiquidityTab({ canTrade, userAddress }: { canTrade: boolean; userAddres
     }
   });
 
-  const { data: balanceB, isLoading: isLoadingBalanceB } = useReadContract({
+  const { data: balanceB, isLoading: isLoadingBalanceB, refetch: refetchBalanceB } = useReadContract({
     address: tokenBAddress,
     abi: ERC20_ABI,
     functionName: 'balanceOf',
@@ -761,7 +774,7 @@ function LiquidityTab({ canTrade, userAddress }: { canTrade: boolean; userAddres
   const poolExists = pairAddress && pairAddress !== '0x0000000000000000000000000000000000000000';
 
   // Lire les allowances pour vérifier si les tokens sont approuvés (pour TRADING_POOL)
-  const { data: allowanceA } = useReadContract({
+  const { data: allowanceA, refetch: refetchAllowanceA } = useReadContract({
     address: tokenAAddress,
     abi: ERC20_ABI,
     functionName: 'allowance',
@@ -772,7 +785,7 @@ function LiquidityTab({ canTrade, userAddress }: { canTrade: boolean; userAddres
     }
   });
 
-  const { data: allowanceB } = useReadContract({
+  const { data: allowanceB, refetch: refetchAllowanceB } = useReadContract({
     address: tokenBAddress,
     abi: ERC20_ABI,
     functionName: 'allowance',
@@ -820,9 +833,16 @@ function LiquidityTab({ canTrade, userAddress }: { canTrade: boolean; userAddres
   // Force refetch after successful transaction
   useEffect(() => {
     if (isSuccess) {
-      refetchPair();
+      console.log('✅ Liquidity operation successful! Refreshing data...');
+      setTimeout(() => {
+        refetchPair();
+        refetchBalanceA();
+        refetchBalanceB();
+        refetchAllowanceA(); // Refetch allowances after approval
+        refetchAllowanceB();
+      }, 2000); // Wait 2s for blockchain to confirm
     }
-  }, [isSuccess, refetchPair]);
+  }, [isSuccess, refetchPair, refetchBalanceA, refetchBalanceB, refetchAllowanceA, refetchAllowanceB]);
 
   // Format balances
   const balanceAFormatted = isLoadingBalanceA
@@ -1864,14 +1884,8 @@ function BuyAssetsTab({ userAddress, canTrade }: { userAddress: Address; canTrad
   const assetPoolAddress = selectedAssetData ? (selectedAssetData as any).pool as Address : null;
   const assetSymbol = selectedAssetData ? (selectedAssetData as any).symbol as string : '';
   const assetNFTAddress = selectedAssetData ? (selectedAssetData as any).nft as Address : null;
-  const assetDocuments = selectedAssetData ? (selectedAssetData as any).documents as string : '';
-  const assetTypeFromDocs = getTokenType(assetDocuments);
 
-  // Get price info from documents (format: "DIVISIBLE|USDC" or "UNIQUE|WETH")
-  const paymentTokenSymbol = assetDocuments ? assetDocuments.split('|')[1]?.trim() || 'USDC' : 'USDC';
-  const paymentTokenAddress = REAL_TOKENS.find(t => t.symbol === paymentTokenSymbol)?.address || REAL_TOKENS[0].address;
-
-  // Get NFT metadata to retrieve estimatedValue (price entered during asset creation)
+  // Get NFT metadata to retrieve estimatedValue and payment token info
   const { data: nftMetadata } = useReadContract({
     address: assetNFTAddress as Address,
     abi: ASSET_NFT_ABI,
@@ -1881,6 +1895,34 @@ function BuyAssetsTab({ userAddress, canTrade }: { userAddress: Address; canTrad
       refetchInterval: 30_000,
     }
   });
+
+  // Extract documents from NFT metadata (not from AssetRecord which doesn't have it)
+  const assetDocuments = nftMetadata ? (nftMetadata as any).documents as string : '';
+  const assetTypeFromDocs = getTokenType(assetDocuments);
+
+  // Get price info from documents (format: "DIVISIBLE|USDC" or "UNIQUE|USDT")
+  // Documents are stored as "tokenType|paymentToken" during asset creation
+  let paymentTokenSymbol = 'USDC'; // Default fallback
+  
+  if (assetDocuments && assetDocuments.includes('|')) {
+    const parts = assetDocuments.split('|');
+    if (parts.length >= 2) {
+      const tokenFromDocs = parts[1]?.trim();
+      // Validate it's a known token (USDC, USDT, WETH)
+      if (tokenFromDocs && (tokenFromDocs === 'USDC' || tokenFromDocs === 'USDT' || tokenFromDocs === 'WETH')) {
+        paymentTokenSymbol = tokenFromDocs;
+        console.log('✅ Payment token from asset NFT metadata:', paymentTokenSymbol, '| Full documents:', assetDocuments);
+      } else {
+        console.warn('⚠️ Unknown payment token in documents:', tokenFromDocs, '| Full documents:', assetDocuments, '- Using default USDC');
+      }
+    } else {
+      console.warn('⚠️ Documents split failed, parts:', parts, '| Full documents:', assetDocuments);
+    }
+  } else {
+    console.warn('⚠️ Asset documents not in expected format (tokenType|paymentToken):', assetDocuments, '- Using default USDC');
+  }
+  
+  const paymentTokenAddress = REAL_TOKENS.find(t => t.symbol === paymentTokenSymbol)?.address || REAL_TOKENS[0].address;
 
   // Get total supply to calculate price per token
   const { data: tokenTotalSupply } = useReadContract({
@@ -1898,12 +1940,16 @@ function BuyAssetsTab({ userAddress, canTrade }: { userAddress: Address; canTrad
   
   // Debug logs (can be removed later)
   if (selectedAssetId && nftMetadata) {
-    console.log('Asset Price Debug:', {
+    console.log('Asset Debug Info:', {
       assetId: selectedAssetId,
+      assetSymbol: assetSymbol,
+      assetDocuments: assetDocuments,
+      assetType: assetTypeFromDocs,
+      paymentToken: paymentTokenSymbol,
+      paymentTokenAddress: paymentTokenAddress,
       estimatedValue: estimatedValue.toString(),
       estimatedValueNumber: Number(estimatedValue),
       totalSupply: tokenTotalSupply?.toString(),
-      assetType: assetTypeFromDocs,
     });
   }
   
@@ -2007,14 +2053,14 @@ function BuyAssetsTab({ userAddress, canTrade }: { userAddress: Address; canTrad
 
   const maxAffordable = fixedPricePerToken > 0 ? Math.floor(userPaymentBalanceFormatted / fixedPricePerToken) : 0;
 
-  // Vérifier le balance du vendeur pour l'asset sélectionné
+  // Vérifier le balance du vendeur pour l'asset sélectionné (DIVISIBLE only)
   const { data: sellerAssetBalance } = useReadContract({
     address: assetTokenAddress as Address,
     abi: ERC20_ABI,
     functionName: 'balanceOf',
     args: [sellerAddress as Address],
     query: {
-      enabled: !!assetTokenAddress && !!sellerAddress && sellerAddress.startsWith('0x') && sellerAddress.length === 42,
+      enabled: !!assetTokenAddress && !!sellerAddress && sellerAddress.startsWith('0x') && sellerAddress.length === 42 && assetType === 'DIVISIBLE',
       refetchInterval: 10_000,
     }
   });
@@ -2022,6 +2068,40 @@ function BuyAssetsTab({ userAddress, canTrade }: { userAddress: Address; canTrad
   const sellerAssetBalanceFormatted = sellerAssetBalance
     ? Number(formatUnits(sellerAssetBalance as bigint, 18))
     : 0;
+
+  // For UNIQUE assets (NFTs), verify who actually owns the NFT
+  const tokenId = selectedAssetId ? BigInt(selectedAssetId) : undefined;
+  const { data: nftOwner, refetch: refetchNFTOwner } = useReadContract({
+    address: assetNFTAddress as Address,
+    abi: [
+      {
+        "inputs": [{"internalType": "uint256", "name": "tokenId", "type": "uint256"}],
+        "name": "ownerOf",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+      }
+    ],
+    functionName: 'ownerOf',
+    args: tokenId ? [tokenId] : undefined,
+    query: {
+      enabled: !!assetNFTAddress && !!tokenId && assetType === 'UNIQUE',
+      refetchInterval: 2_000, // Refetch every 2 seconds for fresh ownership data
+      refetchOnMount: 'always', // Always refetch when component mounts
+      staleTime: 0, // Data is always considered stale
+    }
+  });
+
+  const nftOwnerAddress = nftOwner ? (nftOwner as Address).toLowerCase() : null;
+  const isOwnedByUser = nftOwnerAddress === userAddress.toLowerCase();
+  const isOwnedBySeller = nftOwnerAddress === sellerAddress.toLowerCase();
+
+  // Force refetch when seller address or asset changes
+  useEffect(() => {
+    if (assetType === 'UNIQUE' && assetNFTAddress && tokenId) {
+      refetchNFTOwner();
+    }
+  }, [sellerAddress, selectedAssetId, assetType, assetNFTAddress, tokenId]);
 
   // Auto-fill seller if listing exists
   useEffect(() => {
@@ -2076,9 +2156,33 @@ function BuyAssetsTab({ userAddress, canTrade }: { userAddress: Address; canTrad
       return;
     }
 
+    // For UNIQUE assets (NFTs), verify ownership before creating order
+    if (assetType === 'UNIQUE') {
+      if (!nftOwnerAddress) {
+        setError('❌ Cannot verify NFT ownership. Please try again.');
+        return;
+      }
+
+      if (isOwnedByUser) {
+        setError('❌ You already own this NFT! You cannot buy it from yourself.');
+        return;
+      }
+
+      if (!isOwnedBySeller) {
+        setError(`❌ The seller (${sellerAddress}) does not own this NFT. Current owner: ${nftOwnerAddress}. Please check the seller address.`);
+        return;
+      }
+    }
+
     setIsPurchasing(true);
     setError(null);
     setTxHash(null);
+
+    console.log('=== STARTING BUY TRANSACTION ===');
+    console.log('Payment Token Symbol:', paymentTokenSymbol);
+    console.log('Payment Token Address:', paymentTokenAddress);
+    console.log('Asset Type:', assetType);
+    console.log('================================');
 
     try {
       // Distinction NFT vs ERC20
@@ -2375,9 +2479,15 @@ function BuyAssetsTab({ userAddress, canTrade }: { userAddress: Address; canTrad
           filterType={assetType}
         />
         {selectedAssetId && assetSymbol && (
-          <p className="mt-2 text-sm text-gray-600">
-            Selected: <span className="font-semibold">{assetSymbol}</span> (Type: {assetTypeFromDocs})
-          </p>
+          <div className="mt-2 space-y-1">
+            <p className="text-sm text-gray-600">
+              Selected: <span className="font-semibold">{assetSymbol}</span> (Type: {assetTypeFromDocs})
+            </p>
+            <p className="text-xs text-blue-600 flex items-center gap-1">
+              <span>{paymentTokenSymbol === 'USDC' ? '💵' : paymentTokenSymbol === 'USDT' ? '💲' : '💎'}</span>
+              <span>Payment token: <strong>{paymentTokenSymbol}</strong> (configured during asset creation)</span>
+            </p>
+          </div>
         )}
       </div>
 
@@ -2394,13 +2504,33 @@ function BuyAssetsTab({ userAddress, canTrade }: { userAddress: Address; canTrad
         {isListed && (
           <p className="mt-2 text-xs text-green-600">✓ Listing found - seller auto-filled</p>
         )}
-        {sellerAddress && sellerAddress.length === 42 && assetTokenAddress && (
+        {assetType === 'DIVISIBLE' && sellerAddress && sellerAddress.length === 42 && assetTokenAddress && (
           <p className="mt-2 text-xs text-blue-600">
             📊 Seller balance: <strong>{sellerAssetBalanceFormatted.toFixed(2)}</strong> tokens
             {sellerAssetBalanceFormatted === 0 && (
               <span className="ml-1 text-red-600">⚠️ Seller has no tokens!</span>
             )}
           </p>
+        )}
+        {assetType === 'UNIQUE' && selectedAssetId && nftOwnerAddress && (
+          <div className="mt-2 p-3 rounded-lg bg-blue-50 border border-blue-200">
+            <p className="text-xs font-semibold text-blue-800 mb-1">🔍 NFT Ownership Verification:</p>
+            <p className="text-xs text-blue-700">
+              Current owner: <code className="bg-white px-1 py-0.5 rounded text-[10px]">{nftOwnerAddress}</code>
+            </p>
+            {isOwnedByUser && (
+              <p className="text-xs text-red-600 font-semibold mt-1">⚠️ You already own this NFT!</p>
+            )}
+            {!isOwnedByUser && sellerAddress && sellerAddress.length === 42 && (
+              <>
+                {isOwnedBySeller ? (
+                  <p className="text-xs text-green-600 font-semibold mt-1">✅ Seller owns this NFT</p>
+                ) : (
+                  <p className="text-xs text-red-600 font-semibold mt-1">❌ Seller does NOT own this NFT!</p>
+                )}
+              </>
+            )}
+          </div>
         )}
         <p className="mt-1 text-xs text-gray-500">Enter the address of the token holder you want to buy from</p>
       </div>
@@ -3430,14 +3560,34 @@ function AssetBalanceRowByType({
   // Déterminer le type depuis documents (format: "DIVISIBLE|USDC" ou "UNIQUE|WETH")
   const assetType = getTokenType(documents);
 
-  // Récupérer le balance du token
+  // Pour les NFTs UNIQUE, vérifier la propriété avec ownerOf
+  const { data: nftOwner } = useReadContract({
+    address: nftAddress as Address,
+    abi: [
+      {
+        "inputs": [{"internalType": "uint256", "name": "tokenId", "type": "uint256"}],
+        "name": "ownerOf",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+      }
+    ],
+    functionName: 'ownerOf',
+    args: [assetId],
+    query: {
+      enabled: !!nftAddress && assetType === 'UNIQUE',
+      refetchInterval: 3_000,
+    }
+  });
+
+  // Récupérer le balance du token (pour DIVISIBLE seulement)
   const { data: balance } = useReadContract({
     address: tokenAddress as Address,
     abi: ERC20_ABI,
     functionName: 'balanceOf',
     args: [userAddress as Address],
     query: {
-      enabled: !!tokenAddress,
+      enabled: !!tokenAddress && assetType === 'DIVISIBLE',
       refetchInterval: 10_000,
     }
   });
@@ -3458,27 +3608,44 @@ function AssetBalanceRowByType({
     abi: ERC20_ABI,
     functionName: 'totalSupply',
     query: {
-      enabled: !!tokenAddress,
+      enabled: !!tokenAddress && assetType === 'DIVISIBLE',
       refetchInterval: 30_000,
     }
   });
 
-  // Calculer le balance en entier
+  // Pour les NFTs UNIQUE, vérifier si l'utilisateur possède le NFT
+  const ownsNFT = assetType === 'UNIQUE' && nftOwner 
+    ? (nftOwner as Address).toLowerCase() === userAddress.toLowerCase()
+    : false;
+
+  // Calculer le balance en entier (pour DIVISIBLE)
   const balanceInt = balance && decimals
     ? Number(formatUnits(balance as bigint, decimals as number))
     : 0;
 
-  // Calculer le total supply en entier
+  // Calculer le total supply en entier (pour DIVISIBLE)
   const totalSupplyInt = totalSupply && decimals
     ? Number(formatUnits(totalSupply as bigint, decimals as number))
     : 0;
 
-  // Ne pas afficher si ne correspond pas au type filtré ou balance = 0 ou pas actif
-  if (!tokenAddress || !isActive || balanceInt === 0 || assetType !== filterType) {
+  // Ne pas afficher si :
+  // - Pas d'adresse ou pas actif
+  // - Ne correspond pas au type filtré
+  // - Pour DIVISIBLE : balance = 0
+  // - Pour UNIQUE : ne possède pas le NFT
+  if (!tokenAddress || !isActive || assetType !== filterType) {
+    return null;
+  }
+  
+  if (assetType === 'DIVISIBLE' && balanceInt === 0) {
+    return null;
+  }
+  
+  if (assetType === 'UNIQUE' && !ownsNFT) {
     return null;
   }
 
-  // Formater en entier avec séparateurs de milliers
+  // Formater en entier avec séparateurs de milliers (pour DIVISIBLE)
   const displayBalance = Math.floor(balanceInt).toLocaleString('en-US');
   const displayTotalSupply = Math.floor(totalSupplyInt).toLocaleString('en-US');
 
@@ -3495,16 +3662,25 @@ function AssetBalanceRowByType({
         </div>
       </div>
       <div className="text-right">
-        <div className="flex flex-col items-end gap-1">
-          <p className="font-mono text-sm font-semibold text-purple-900 whitespace-nowrap">
-            {displayBalance} / {displayTotalSupply}
-          </p>
-          {totalSupplyInt > 0 && (
-            <p className="text-xs text-purple-600 font-medium">
-              {((balanceInt / totalSupplyInt) * 100).toFixed(1)}%
+        {assetType === 'UNIQUE' ? (
+          // Affichage pour NFT UNIQUE
+          <div className="flex items-center gap-2">
+            <span className="text-green-600 font-bold text-lg">✓</span>
+            <p className="text-sm font-semibold text-green-700">Owned</p>
+          </div>
+        ) : (
+          // Affichage pour DIVISIBLE
+          <div className="flex flex-col items-end gap-1">
+            <p className="font-mono text-sm font-semibold text-purple-900 whitespace-nowrap">
+              {displayBalance} / {displayTotalSupply}
             </p>
-          )}
-        </div>
+            {totalSupplyInt > 0 && (
+              <p className="text-xs text-purple-600 font-medium">
+                {((balanceInt / totalSupplyInt) * 100).toFixed(1)}%
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

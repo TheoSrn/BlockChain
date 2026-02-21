@@ -92,7 +92,7 @@ export function useTradingPool(
   });
 
   // Vérifier l'allowance du token d'entrée
-  const { data: allowance } = useReadContract({
+  const { data: allowance, refetch: refetchAllowance } = useReadContract({
     address: tokenIn,
     abi: ERC20_ABI,
     functionName: 'allowance',
@@ -144,6 +144,7 @@ export function useTradingPool(
     pairAddress,
     needsApproval,
     allowance,
+    refetchAllowance,
     canTrade: canTrade ?? false,
     tradingPoolAddress: TRADING_POOL_ADDRESS,
   };

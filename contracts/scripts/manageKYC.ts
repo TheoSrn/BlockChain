@@ -38,7 +38,8 @@ async function main() {
   // Exemple d'adresses à whitelister (remplacer par vos adresses)
   const addressesToWhitelist = [
     "0xA24a49D62C3Dc81a9BADC056dc69a1B386593FcF", // Admin/Deployer Account
-    process.env.NEXT_PUBLIC_PRIMARY_SALE_ADDRESS || "0x63B5969D67B1A7bd21D153D5E07fA171497e735D", // PrimarySale Contract
+    process.env.NEXT_PUBLIC_PRIMARY_SALE_ADDRESS || "0xe4fdffb247e5D4a2E5dCeeB4a05d526C17336D03", // PrimarySale Contract (ERC20)
+    process.env.NEXT_PUBLIC_PRIMARY_SALE_NFT_ADDRESS || "0xe602280Ed991B01Ba253Cd738aFCFcF498c31943", // PrimarySaleNFT Contract (NFT)
   ];
 
   // Adresse à retirer de la whitelist

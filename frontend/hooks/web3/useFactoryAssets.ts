@@ -47,7 +47,9 @@ export function useFactoryAssets() {
     functionName: 'assetCount',
     query: {
       enabled: hasFactory,
-      refetchInterval: 5_000,
+      refetchInterval: 3_000, // Refetch every 3 seconds for fresh data
+      refetchOnMount: 'always',
+      staleTime: 0,
     },
   });
 
@@ -151,6 +153,14 @@ export function useFactoryAssets() {
           if (result.status === 'fulfilled' && result.value) {
             const assetRecord = result.value as any;
             const tokenAddress = assetRecord.token;
+            const nftAddress = assetRecord.nft;
+            const assetId = BigInt(i + 1);
+            
+            // Check if this is a UNIQUE (NFT) or DIVISIBLE asset
+            const metadata = metadatas[i] as any;
+            const isUnique = metadata?.documents?.includes('UNIQUE');
+            
+            console.log(`[useFactoryAssets] Asset ${i + 1} - Name: ${assetRecord.name}, isUnique: ${isUnique}, documents: "${metadata?.documents}"`);
             
             // Récupérer le totalSupply
             supplyPromises.push(
@@ -166,17 +176,39 @@ export function useFactoryAssets() {
 
             // Récupérer le balance de l'utilisateur si connecté
             if (userAddress) {
-              balancePromises.push(
-                client.readContract({
-                  address: tokenAddress as `0x${string}`,
-                  abi: ASSET_ERC20_ABI,
-                  functionName: 'balanceOf',
-                  args: [userAddress],
-                }).catch((error) => {
-                  console.error(`[useFactoryAssets] Failed to fetch balance for asset ${i + 1}:`, error);
-                  return BigInt(0);
-                })
-              );
+              if (isUnique) {
+                // For NFTs, check ownership with ownerOf instead of balanceOf
+                console.log(`[useFactoryAssets] Checking NFT ownership for asset ${i + 1}, tokenId ${assetId}, NFT address: ${nftAddress}`);
+                balancePromises.push(
+                  client.readContract({
+                    address: nftAddress as `0x${string}`,
+                    abi: ASSET_NFT_ABI,
+                    functionName: 'ownerOf',
+                    args: [assetId],
+                  }).then((owner: any) => {
+                    const ownsNFT = (owner as string).toLowerCase() === userAddress.toLowerCase();
+                    console.log(`[useFactoryAssets] Asset ${i + 1} NFT owner: ${owner}, userAddress: ${userAddress}, owns: ${ownsNFT}`);
+                    // Return 1 if user owns the NFT, 0 otherwise
+                    return ownsNFT ? BigInt(1) : BigInt(0);
+                  }).catch((error) => {
+                    console.error(`[useFactoryAssets] Failed to check NFT ownership for asset ${i + 1}:`, error);
+                    return BigInt(0);
+                  })
+                );
+              } else {
+                // For divisible assets, use balanceOf on the ERC20 token
+                balancePromises.push(
+                  client.readContract({
+                    address: tokenAddress as `0x${string}`,
+                    abi: ASSET_ERC20_ABI,
+                    functionName: 'balanceOf',
+                    args: [userAddress],
+                  }).catch((error) => {
+                    console.error(`[useFactoryAssets] Failed to fetch balance for asset ${i + 1}:`, error);
+                    return BigInt(0);
+                  })
+                );
+              }
             } else {
               balancePromises.push(Promise.resolve(BigInt(0)));
             }

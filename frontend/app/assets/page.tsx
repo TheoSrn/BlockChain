@@ -1,15 +1,199 @@
 'use client';
 
-import { useAccount } from 'wagmi';
+import { useAccount, useReadContract } from 'wagmi';
 import { useFactoryAssets } from '@/hooks/web3/useFactoryAssets';
 import Link from 'next/link';
-import { useState } from 'react';
-import { formatUnits } from 'viem';
+import { useState, useEffect } from 'react';
+import { formatUnits, Address } from 'viem';
+
+// NFT Ownership Verification Component
+function UniqueAssetCardWithOwnership({ 
+  asset, 
+  userAddress, 
+  onViewDetails 
+}: { 
+  asset: any; 
+  userAddress: Address;
+  onViewDetails: (asset: any) => void;
+}) {
+  const tokenId = BigInt(asset.id);
+  const nftAddress = asset.nft as Address;
+
+  // Verify NFT ownership with ownerOf
+  const { data: nftOwner, refetch: refetchOwner } = useReadContract({
+    address: nftAddress,
+    abi: [
+      {
+        "inputs": [{"internalType": "uint256", "name": "tokenId", "type": "uint256"}],
+        "name": "ownerOf",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+      }
+    ],
+    functionName: 'ownerOf',
+    args: [tokenId],
+    query: {
+      enabled: !!nftAddress && !!tokenId,
+      refetchInterval: 3_000, // Refetch every 3 seconds
+      refetchOnMount: 'always',
+      staleTime: 0,
+    }
+  });
+
+  const nftOwnerAddress = nftOwner ? (nftOwner as Address).toLowerCase() : null;
+  const isOwnedByUser = nftOwnerAddress === userAddress?.toLowerCase();
+
+  // Debug logs
+  useEffect(() => {
+    if (nftOwnerAddress) {
+      console.log(`[Assets Page] NFT #${asset.id} (${asset.symbol}):`, {
+        owner: nftOwnerAddress,
+        userAddress: userAddress?.toLowerCase(),
+        isOwnedByUser,
+      });
+    }
+  }, [nftOwnerAddress, userAddress, isOwnedByUser, asset.id, asset.symbol]);
+
+  // Helper pour extraire le payment token
+  const getPaymentToken = (documents: string) => {
+    if (!documents) return '';
+    const parts = documents.split('|').map(p => p.trim());
+    if (parts.length >= 2 && (parts[0] === 'DIVISIBLE' || parts[0] === 'UNIQUE')) {
+      return parts[1];
+    }
+    return '';
+  };
+
+  const paymentToken = getPaymentToken(asset.metadata?.documents || '');
+
+  return (
+    <div className="group overflow-hidden rounded-xl border border-gray-800 bg-gray-900/50 transition-all hover:border-purple-500/50 hover:shadow-lg hover:shadow-purple-500/20">
+      {/* Image */}
+      <div className="relative h-56 w-full overflow-hidden bg-gray-800">
+        {asset.imageUrl ? (
+          <img
+            src={asset.imageUrl}
+            alt={asset.name}
+            className="h-full w-full object-cover transition-transform group-hover:scale-105"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = 'none';
+              (e.target as HTMLImageElement).parentElement!.classList.add('flex', 'items-center', 'justify-center');
+            }}
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center">
+            <div className="text-center text-gray-600">
+              <svg className="mx-auto mb-2 h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <p className="text-sm">No image</p>
+            </div>
+          </div>
+        )}
+        {/* Badge Status */}
+        <div className="absolute right-3 top-3">
+          <span className={`rounded-full px-3 py-1 text-xs font-semibold backdrop-blur-sm ${
+            asset.active
+              ? 'bg-green-500/90 text-white'
+              : 'bg-gray-500/90 text-white'
+          }`}>
+            {asset.active ? 'Active' : 'Inactive'}
+          </span>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="p-5">
+        <div className="mb-4">
+          <h3 className="mb-2 text-xl font-bold text-white">{asset.name}</h3>
+          
+          {/* Informations rapides */}
+          <div className="flex flex-wrap gap-2 text-xs">
+            <span className="rounded-full bg-purple-500/30 px-2 py-1 font-semibold text-purple-300">
+              {asset.symbol}
+            </span>
+            <span className="rounded-full px-2 py-1 text-xs font-semibold bg-yellow-500/20 text-yellow-300">
+              💎 Unique NFT
+            </span>
+            {asset.metadata?.location && (
+              <span className="rounded-full bg-blue-500/20 px-2 py-1 text-blue-300">
+                📍 {asset.metadata.location}
+              </span>
+            )}
+            {asset.metadata?.surface > 0 && (
+              <span className="rounded-full bg-green-500/20 px-2 py-1 text-green-300">
+                {asset.metadata.surface.toString()} m²
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* NFT Ownership Information */}
+        <div className="mb-4 space-y-2 border-t border-gray-800 pt-4 text-xs">
+          <div className="flex justify-between items-baseline">
+            <span className="text-gray-500">Asset Value:</span>
+            <span className="font-bold text-green-400">
+              {asset.metadata?.estimatedValue ? (
+                <>
+                  ${Number(asset.metadata.estimatedValue).toLocaleString()}
+                  {paymentToken && (
+                    <span className="ml-1 text-xs text-gray-400">({paymentToken})</span>
+                  )}
+                </>
+              ) : (
+                '$--'
+              )}
+            </span>
+          </div>
+          <div className="flex justify-between items-baseline">
+            <span className="text-gray-500">Ownership:</span>
+            <span className={`font-semibold ${
+              isOwnedByUser 
+                ? 'text-green-400' 
+                : 'text-gray-400'
+            }`}>
+              {isOwnedByUser ? '✓ Owned' : '✗ Not Owned'}
+            </span>
+          </div>
+          {nftOwnerAddress && (
+            <div className="mt-2 rounded-lg bg-blue-500/10 border border-blue-500/20 p-2">
+              <p className="text-xs text-blue-400 mb-1">
+                <span className="font-semibold">🔍 Current Owner:</span>
+              </p>
+              <code className="text-[10px] text-blue-300 break-all">
+                {nftOwnerAddress}
+              </code>
+              {isOwnedByUser && (
+                <p className="text-xs text-green-400 mt-1 font-semibold">
+                  🎉 This is you!
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          <button 
+            onClick={() => onViewDetails(asset)}
+            className="flex-1 rounded-lg bg-purple-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-purple-700"
+          >
+            View Details
+          </button>
+          <button className="flex-1 rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700">
+            Trade
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function AssetsPage() {
-  const { isConnected } = useAccount();
-  const { assets, isLoading, assetCount } = useFactoryAssets();
+  const { isConnected, address: userAddress } = useAccount();
+  const { assets, isLoading, assetCount, refetchCount } = useFactoryAssets();
   const [selectedAsset, setSelectedAsset] = useState<any>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Filtrer les assets indésirables
   const filteredAssets = assets.filter(asset => 
@@ -252,11 +436,27 @@ export default function AssetsPage() {
             <span className="text-yellow-400 ml-1">{uniqueAssets.length} exclusive</span>
           </p>
         </div>
-        <Link href="/tokenize/new">
-          <button className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors font-semibold">
-            Create Asset
+        <div className="flex gap-3">
+          <button 
+            onClick={async () => {
+              setIsRefreshing(true);
+              await refetchCount();
+              setTimeout(() => setIsRefreshing(false), 1000);
+            }}
+            disabled={isRefreshing}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            <svg className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
           </button>
-        </Link>
+          <Link href="/tokenize/new">
+            <button className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors font-semibold">
+              Create Asset
+            </button>
+          </Link>
+        </div>
       </div>
 
       {!isConnected ? (
@@ -323,7 +523,14 @@ export default function AssetsPage() {
               </div>
             ) : (
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {uniqueAssets.map(renderAssetCard)}
+                {uniqueAssets.map(asset => (
+                  <UniqueAssetCardWithOwnership 
+                    key={asset.id.toString()} 
+                    asset={asset} 
+                    userAddress={userAddress as Address}
+                    onViewDetails={setSelectedAsset}
+                  />
+                ))}
               </div>
             )}
           </div>
