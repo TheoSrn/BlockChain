@@ -5,7 +5,7 @@
  * Avec vérification KYC et interface DeFi moderne
  */
 
-  import { useAccount, useReadContract, useBalance } from 'wagmi';
+import { useAccount, useReadContract, useBalance } from 'wagmi';
 import { useState, useEffect } from 'react';
 import { useKYCStatus } from '@/hooks/web3/useKYCStatus';
 import { useTradingPool, useTradingPoolWrite } from '@/hooks/web3/useTradingPool';
@@ -14,6 +14,7 @@ import { CONTRACT_ADDRESSES } from '@/config/contracts';
 import { Address, formatUnits, parseUnits } from 'viem';
 import FACTORY_ABI from '@/abi/Factory';
 import ASSET_NFT_ABI from '@/abi/AssetNFT';
+import ORACLE_ABI from '@/abi/Oracle';
 import { ASSET_POOL_ABI } from '@/abi/AssetPool';
 import { PRIMARY_SALE_ABI } from '@/abi/PrimarySale';
 import { PRIMARY_SALE_NFT_ABI } from '@/abi/PrimarySaleNFT';
@@ -1902,7 +1903,7 @@ function BuyAssetsTab({ userAddress, canTrade }: { userAddress: Address; canTrad
 
   // Get price info from documents (format: "DIVISIBLE|USDC" or "UNIQUE|USDT")
   // Documents are stored as "tokenType|paymentToken" during asset creation
-  let paymentTokenSymbol = 'USDC'; // Default fallback
+  let paymentTokenSymbolFromMetadata = 'USDC'; // Default fallback
   
   if (assetDocuments && assetDocuments.includes('|')) {
     const parts = assetDocuments.split('|');
@@ -1910,8 +1911,8 @@ function BuyAssetsTab({ userAddress, canTrade }: { userAddress: Address; canTrad
       const tokenFromDocs = parts[1]?.trim();
       // Validate it's a known token (USDC, USDT, WETH)
       if (tokenFromDocs && (tokenFromDocs === 'USDC' || tokenFromDocs === 'USDT' || tokenFromDocs === 'WETH')) {
-        paymentTokenSymbol = tokenFromDocs;
-        console.log('✅ Payment token from asset NFT metadata:', paymentTokenSymbol, '| Full documents:', assetDocuments);
+        paymentTokenSymbolFromMetadata = tokenFromDocs;
+        console.log('✅ Payment token from asset NFT metadata:', paymentTokenSymbolFromMetadata, '| Full documents:', assetDocuments);
       } else {
         console.warn('⚠️ Unknown payment token in documents:', tokenFromDocs, '| Full documents:', assetDocuments, '- Using default USDC');
       }
@@ -1921,8 +1922,6 @@ function BuyAssetsTab({ userAddress, canTrade }: { userAddress: Address; canTrad
   } else {
     console.warn('⚠️ Asset documents not in expected format (tokenType|paymentToken):', assetDocuments, '- Using default USDC');
   }
-  
-  const paymentTokenAddress = REAL_TOKENS.find(t => t.symbol === paymentTokenSymbol)?.address || REAL_TOKENS[0].address;
 
   // Get total supply to calculate price per token
   const { data: tokenTotalSupply } = useReadContract({
@@ -1938,6 +1937,36 @@ function BuyAssetsTab({ userAddress, canTrade }: { userAddress: Address; canTrad
   // Extract estimatedValue from metadata
   const estimatedValue = nftMetadata ? (nftMetadata as any).estimatedValue as bigint : BigInt(0);
   
+  // Get Oracle price (priority over estimatedValue)
+  const { data: oraclePriceData } = useReadContract({
+    address: CONTRACT_ADDRESSES.PRICE_ORACLE as `0x${string}`,
+    abi: ORACLE_ABI,
+    functionName: 'getPrice',
+    args: selectedAssetId ? [BigInt(selectedAssetId)] : undefined,
+    query: {
+      enabled: !!selectedAssetId,
+      refetchInterval: 10_000,
+    },
+  });
+
+  let oraclePrice = 0;
+  let oracleCurrency = '';
+  if (oraclePriceData) {
+    const [price, , currency] = oraclePriceData as [bigint, bigint, string];
+    if (price > BigInt(0)) {
+      oraclePrice = parseFloat(formatUnits(price, 6));
+      oracleCurrency = currency || '';
+    }
+  }
+
+  // IMPORTANT: Use Oracle currency for payment token if available (reflects admin updates)
+  // Otherwise fallback to metadata payment token (set during asset creation)
+  const paymentTokenSymbol = oracleCurrency || paymentTokenSymbolFromMetadata;
+  const paymentTokenAddress = REAL_TOKENS.find(t => t.symbol === paymentTokenSymbol)?.address || REAL_TOKENS[0].address;
+
+  // Determine display currency: use Oracle currency if available, otherwise metadata paymentToken
+  const displayCurrency = oracleCurrency || paymentTokenSymbolFromMetadata || 'USDC';
+  
   // Debug logs (can be removed later)
   if (selectedAssetId && nftMetadata) {
     console.log('Asset Debug Info:', {
@@ -1945,29 +1974,33 @@ function BuyAssetsTab({ userAddress, canTrade }: { userAddress: Address; canTrad
       assetSymbol: assetSymbol,
       assetDocuments: assetDocuments,
       assetType: assetTypeFromDocs,
-      paymentToken: paymentTokenSymbol,
+      paymentTokenFromMetadata: paymentTokenSymbolFromMetadata,
+      oracleCurrency: oracleCurrency,
+      paymentTokenFinal: paymentTokenSymbol,
       paymentTokenAddress: paymentTokenAddress,
       estimatedValue: estimatedValue.toString(),
       estimatedValueNumber: Number(estimatedValue),
       totalSupply: tokenTotalSupply?.toString(),
+      oraclePrice: oraclePrice,
+      displayCurrency: displayCurrency,
     });
   }
   
   // Calculate price per token
-  // estimatedValue is stored as a raw number (not in wei), so convert to Number directly
-  // For DIVISIBLE assets: price per token = estimatedValue / totalSupply
-  // For UNIQUE assets: price = estimatedValue (it's a unique NFT)
+  // Priority: Oracle price > estimatedValue (to reflect admin updates via Oracle page)
   let pricePerUnit = 100; // Default fallback
   
-  if (estimatedValue > BigInt(0)) {
+  if (oraclePrice > 0) {
+    // Priority 1: Use Oracle price if available
+    pricePerUnit = oraclePrice;
+  } else if (estimatedValue > BigInt(0)) {
     const estimatedValueNumber = Number(estimatedValue); // Raw number, not wei
     
     if (assetTypeFromDocs === 'UNIQUE') {
       // For unique assets, the price is the full estimated value
       pricePerUnit = estimatedValueNumber;
     } else if (tokenTotalSupply && tokenTotalSupply > BigInt(0)) {
-      // For divisible assets, divide by total supply to get price per token
-      const totalSupplyNumber = Number(formatUnits(tokenTotalSupply as bigint, 18));
+      // For divisible assets, price = estimatedValue
       pricePerUnit = estimatedValueNumber;
     }
   }
@@ -2129,6 +2162,26 @@ function BuyAssetsTab({ userAddress, canTrade }: { userAddress: Address; canTrad
     if (!paymentTokenAddress) {
       setError('Payment token not found');
       return;
+    }
+
+    // VALIDATION: Vérifier que le payment token correspond au listing actif
+    if (isListed && listing.paymentToken) {
+      const listingPaymentToken = (listing.paymentToken as Address).toLowerCase();
+      const selectedPaymentToken = paymentTokenAddress.toLowerCase();
+      
+      if (listingPaymentToken !== selectedPaymentToken) {
+        // Trouver le symbole du token demandé par le listing
+        const listingTokenSymbol = REAL_TOKENS.find(t => t.address.toLowerCase() === listingPaymentToken)?.symbol || 'Unknown';
+        
+        setError(`❌ Payment token mismatch! This asset accepts ${listingTokenSymbol} only, but the asset metadata indicates ${paymentTokenSymbol}. Please contact the asset creator to fix the metadata.`);
+        console.error('Payment token mismatch:', {
+          listingPaymentToken,
+          selectedPaymentToken,
+          listingTokenSymbol,
+          paymentTokenSymbol
+        });
+        return;
+      }
     }
 
     // Vérifier que le bon contrat est déployé selon le type d'asset
@@ -2485,8 +2538,14 @@ function BuyAssetsTab({ userAddress, canTrade }: { userAddress: Address; canTrad
             </p>
             <p className="text-xs text-blue-600 flex items-center gap-1">
               <span>{paymentTokenSymbol === 'USDC' ? '💵' : paymentTokenSymbol === 'USDT' ? '💲' : '💎'}</span>
-              <span>Payment token: <strong>{paymentTokenSymbol}</strong> (configured during asset creation)</span>
+              <span>Payment token: <strong>{paymentTokenSymbol}</strong> {oracleCurrency ? '(from Oracle)' : '(from asset metadata)'}</span>
             </p>
+            {isListed && listing.paymentToken && (
+              <p className="text-xs text-green-600 flex items-center gap-1">
+                <span>✓</span>
+                <span>Active listing accepts: <strong>{getTokenSymbol(listing.paymentToken as Address)}</strong></span>
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -2578,10 +2637,10 @@ function BuyAssetsTab({ userAddress, canTrade }: { userAddress: Address; canTrad
           <span className="text-gray-700 font-semibold">Total Price:</span>
           <div className="text-right">
             <p className="text-2xl font-bold text-green-700">
-              {totalPrice.toFixed(2)} {paymentTokenSymbol}
+              {totalPrice.toFixed(2)} {displayCurrency}
             </p>
             <p className="text-xs text-gray-500">
-              {fixedPricePerToken.toFixed(2)} {paymentTokenSymbol} per unit
+              {fixedPricePerToken.toFixed(2)} {displayCurrency} per unit
               {estimatedValue === BigInt(0) && !isListed && (
                 <span className="ml-1 text-orange-600" title="Price not set for this asset">
                   ⚠️
@@ -2616,7 +2675,7 @@ function BuyAssetsTab({ userAddress, canTrade }: { userAddress: Address; canTrad
 
       {totalPrice > userPaymentBalanceFormatted && selectedAssetId && (
         <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-3">
-          <p className="text-sm text-red-800">❌ Insufficient balance. You need {totalPrice.toFixed(2)} {paymentTokenSymbol} but only have {userPaymentBalanceFormatted.toFixed(2)}.</p>
+          <p className="text-sm text-red-800">❌ Insufficient balance. You need {totalPrice.toFixed(2)} {displayCurrency} but only have {userPaymentBalanceFormatted.toFixed(2)}.</p>
         </div>
       )}
 
@@ -2635,7 +2694,7 @@ function BuyAssetsTab({ userAddress, canTrade }: { userAddress: Address; canTrad
         <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
           <p className="text-sm text-yellow-800">
             <strong>⚠️ Price not set:</strong> The estimated value for this asset has not been set. 
-            Using default value of 100 {paymentTokenSymbol}. Please update the asset metadata.
+            Using default value of 100 {displayCurrency}. Please update the asset metadata.
           </p>
         </div>
       )}
@@ -2648,6 +2707,22 @@ function BuyAssetsTab({ userAddress, canTrade }: { userAddress: Address; canTrad
       </div>
     </div>
   );
+}
+
+// Helper function to get token symbol from address
+function getTokenSymbol(paymentTokenAddress: Address | undefined): string {
+  if (!paymentTokenAddress) return 'USDC';
+  
+  const addressLower = paymentTokenAddress.toLowerCase();
+  const usdcAddress = CONTRACT_ADDRESSES.USDC?.toLowerCase();
+  const usdtAddress = CONTRACT_ADDRESSES.USDT?.toLowerCase();
+  const wethAddress = CONTRACT_ADDRESSES.WETH?.toLowerCase();
+  
+  if (addressLower === usdcAddress) return 'USDC';
+  if (addressLower === usdtAddress) return 'USDT';
+  if (addressLower === wethAddress) return 'WETH';
+  
+  return 'USDC'; // Fallback par défaut
 }
 
 // ===== PENDING ORDERS TAB =====
@@ -2945,6 +3020,8 @@ function PendingOrderCardERC20({
   const totalPrice = Number(formatUnits(order.totalPrice || BigInt(0), 18));
   const timestamp = order.timestamp ? Number(order.timestamp) * 1000 : Date.now();
   const timeAgo = new Date(timestamp).toLocaleString();
+  const paymentToken = order.paymentToken as Address | undefined;
+  const tokenSymbol = getTokenSymbol(paymentToken);
 
   const hasApproval = sellerAllowance ? (sellerAllowance as bigint) >= amountWei! : false;
 
@@ -3001,7 +3078,7 @@ function PendingOrderCardERC20({
             </div>
             <div>
               <p className="text-xs text-gray-600">Total Price</p>
-              <p className="text-lg font-bold text-green-700">{totalPrice.toFixed(2)} USDC</p>
+              <p className="text-lg font-bold text-green-700">{totalPrice.toFixed(2)} {tokenSymbol}</p>
             </div>
           </div>
 
@@ -3112,6 +3189,8 @@ function PendingOrderCardNFT({
   const price = Number(formatUnits(order.price || BigInt(0), 18));
   const timestamp = order.timestamp ? Number(order.timestamp) * 1000 : Date.now();
   const timeAgo = new Date(timestamp).toLocaleString();
+  const paymentToken = order.paymentToken as Address | undefined;
+  const tokenSymbol = getTokenSymbol(paymentToken);
 
   const hasApproval = approvedAddress === PRIMARY_SALE_NFT_ADDRESS;
 
@@ -3177,7 +3256,7 @@ function PendingOrderCardNFT({
             </div>
             <div>
               <p className="text-xs text-gray-600">Offer Price</p>
-              <p className="text-lg font-bold text-green-700">{price.toFixed(2)} USDC</p>
+              <p className="text-lg font-bold text-green-700">{price.toFixed(2)} {tokenSymbol}</p>
             </div>
           </div>
 

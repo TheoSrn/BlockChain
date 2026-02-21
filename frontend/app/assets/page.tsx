@@ -5,6 +5,8 @@ import { useFactoryAssets } from '@/hooks/web3/useFactoryAssets';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { formatUnits, Address } from 'viem';
+import { ORACLE_ABI } from '@/abi/Oracle';
+import { CONTRACT_ADDRESSES } from '@/config/contracts';
 
 // NFT Ownership Verification Component
 function UniqueAssetCardWithOwnership({ 
@@ -44,6 +46,28 @@ function UniqueAssetCardWithOwnership({
   const nftOwnerAddress = nftOwner ? (nftOwner as Address).toLowerCase() : null;
   const isOwnedByUser = nftOwnerAddress === userAddress?.toLowerCase();
 
+  // Get Oracle price (priority over estimatedValue)
+  const { data: oraclePriceData } = useReadContract({
+    address: CONTRACT_ADDRESSES.PRICE_ORACLE as `0x${string}`,
+    abi: ORACLE_ABI,
+    functionName: 'getPrice',
+    args: [BigInt(asset.id)],
+    query: {
+      enabled: !!asset.id,
+      refetchInterval: 10_000,
+    },
+  });
+
+  let oraclePrice = 0;
+  let oracleCurrency = '';
+  if (oraclePriceData) {
+    const [price, , currency] = oraclePriceData as [bigint, bigint, string];
+    if (price > BigInt(0)) {
+      oraclePrice = parseFloat(formatUnits(price, 6));
+      oracleCurrency = currency || '';
+    }
+  }
+
   // Debug logs
   useEffect(() => {
     if (nftOwnerAddress) {
@@ -66,6 +90,12 @@ function UniqueAssetCardWithOwnership({
   };
 
   const paymentToken = getPaymentToken(asset.metadata?.documents || '');
+  
+  // Determine display values with Oracle priority
+  const estimatedValue = asset.metadata?.estimatedValue ? Number(asset.metadata.estimatedValue) : 0;
+  const displayPrice = oraclePrice > 0 ? oraclePrice : estimatedValue;
+  const displayCurrency = oracleCurrency || paymentToken || 'USD';
+  const priceSource = oraclePrice > 0 ? 'Oracle' : 'Metadata';
 
   return (
     <div className="group overflow-hidden rounded-xl border border-gray-800 bg-gray-900/50 transition-all hover:border-purple-500/50 hover:shadow-lg hover:shadow-purple-500/20">
@@ -134,15 +164,13 @@ function UniqueAssetCardWithOwnership({
           <div className="flex justify-between items-baseline">
             <span className="text-gray-500">Asset Value:</span>
             <span className="font-bold text-green-400">
-              {asset.metadata?.estimatedValue ? (
+              {displayPrice > 0 ? (
                 <>
-                  ${Number(asset.metadata.estimatedValue).toLocaleString()}
-                  {paymentToken && (
-                    <span className="ml-1 text-xs text-gray-400">({paymentToken})</span>
-                  )}
+                  {displayCurrency === 'USD' ? '$' : ''}{displayPrice.toLocaleString()} {displayCurrency !== 'USD' ? displayCurrency : ''}
+                  <span className="ml-1 text-xs text-gray-400">({priceSource})</span>
                 </>
               ) : (
-                '$--'
+                '--'
               )}
             </span>
           </div>
@@ -171,6 +199,180 @@ function UniqueAssetCardWithOwnership({
               )}
             </div>
           )}
+        </div>
+
+        <div className="flex gap-2">
+          <button 
+            onClick={() => onViewDetails(asset)}
+            className="flex-1 rounded-lg bg-purple-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-purple-700"
+          >
+            View Details
+          </button>
+          <button className="flex-1 rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700">
+            Trade
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Divisible Asset Card Component
+function DivisibleAssetCard({ 
+  asset, 
+  userAddress, 
+  onViewDetails 
+}: { 
+  asset: any; 
+  userAddress: Address;
+  onViewDetails: (asset: any) => void;
+}) {
+  // Get Oracle price (priority over estimatedValue)
+  const { data: oraclePriceData } = useReadContract({
+    address: CONTRACT_ADDRESSES.PRICE_ORACLE as `0x${string}`,
+    abi: ORACLE_ABI,
+    functionName: 'getPrice',
+    args: [BigInt(asset.id)],
+    query: {
+      enabled: !!asset.id,
+      refetchInterval: 10_000,
+    },
+  });
+
+  let oraclePrice = 0;
+  let oracleCurrency = '';
+  if (oraclePriceData) {
+    const [price, , currency] = oraclePriceData as [bigint, bigint, string];
+    if (price > BigInt(0)) {
+      oraclePrice = parseFloat(formatUnits(price, 6));
+      oracleCurrency = currency || '';
+    }
+  }
+
+  // Helper pour extraire le payment token
+  const getPaymentToken = (documents: string) => {
+    if (!documents) return '';
+    const parts = documents.split('|').map(p => p.trim());
+    if (parts.length >= 2 && (parts[0] === 'DIVISIBLE' || parts[0] === 'UNIQUE')) {
+      return parts[1];
+    }
+    return '';
+  };
+
+  const paymentToken = getPaymentToken(asset.metadata?.documents || '');
+  
+  // Determine display values with Oracle priority
+  const estimatedValue = asset.metadata?.estimatedValue ? Number(asset.metadata.estimatedValue) : 0;
+  const displayPrice = oraclePrice > 0 ? oraclePrice : estimatedValue;
+  const displayCurrency = oracleCurrency || paymentToken || 'USD';
+  const priceSource = oraclePrice > 0 ? 'Oracle' : 'Metadata';
+
+  // Calculate share value
+  const userShareValue = asset.userBalance !== undefined && displayPrice > 0
+    ? Number(formatUnits(asset.userBalance, 18)) * displayPrice
+    : 0;
+
+  return (
+    <div className="group overflow-hidden rounded-xl border border-gray-800 bg-gray-900/50 transition-all hover:border-purple-500/50 hover:shadow-lg hover:shadow-purple-500/20">
+      {/* Image */}
+      <div className="relative h-56 w-full overflow-hidden bg-gray-800">
+        {asset.imageUrl ? (
+          <img
+            src={asset.imageUrl}
+            alt={asset.name}
+            className="h-full w-full object-cover transition-transform group-hover:scale-105"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = 'none';
+              (e.target as HTMLImageElement).parentElement!.classList.add('flex', 'items-center', 'justify-center');
+            }}
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center">
+            <div className="text-center text-gray-600">
+              <svg className="mx-auto mb-2 h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <p className="text-sm">No image</p>
+            </div>
+          </div>
+        )}
+        {/* Badge Status */}
+        <div className="absolute right-3 top-3">
+          <span className={`rounded-full px-3 py-1 text-xs font-semibold backdrop-blur-sm ${
+            asset.active
+              ? 'bg-green-500/90 text-white'
+              : 'bg-gray-500/90 text-white'
+          }`}>
+            {asset.active ? 'Active' : 'Inactive'}
+          </span>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="p-5">
+        <div className="mb-4">
+          <h3 className="mb-2 text-xl font-bold text-white">{asset.name}</h3>
+          
+          {/* Informations rapides */}
+          <div className="flex flex-wrap gap-2 text-xs">
+            <span className="rounded-full bg-purple-500/30 px-2 py-1 font-semibold text-purple-300">
+              {asset.symbol}
+            </span>
+            <span className="rounded-full px-2 py-1 text-xs font-semibold bg-blue-500/20 text-blue-300">
+              🔹 Divisible
+            </span>
+            {asset.metadata?.location && (
+              <span className="rounded-full bg-blue-500/20 px-2 py-1 text-blue-300">
+                📍 {asset.metadata.location}
+              </span>
+            )}
+            {asset.metadata?.surface > 0 && (
+              <span className="rounded-full bg-green-500/20 px-2 py-1 text-green-300">
+                {asset.metadata.surface.toString()} m²
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Divisible Asset Information */}
+        <div className="mb-4 space-y-2 border-t border-gray-800 pt-4 text-xs">
+          <div className="flex justify-between items-baseline">
+            <span className="text-gray-500">Your Ownership:</span>
+            <span className="font-mono font-semibold text-purple-300">
+              {asset.userBalance !== undefined && asset.totalSupply !== undefined ? (
+                <>
+                  {formatUnits(asset.userBalance, 18)} / {formatUnits(asset.totalSupply, 18)}
+                </>
+              ) : (
+                '-- / --'
+              )}
+            </span>
+          </div>
+          <div className="flex justify-between items-baseline">
+            <span className="text-gray-500">Token Price:</span>
+            <span className="font-semibold text-blue-400">
+              {displayPrice > 0 ? (
+                <>
+                  {displayCurrency === 'USD' ? '$' : ''}{displayPrice.toLocaleString()} {displayCurrency !== 'USD' ? displayCurrency : ''}
+                  <span className="ml-1 text-xs text-gray-400">({priceSource})</span>
+                </>
+              ) : (
+                '--'
+              )}
+            </span>
+          </div>
+          <div className="flex justify-between items-baseline">
+            <span className="text-gray-500">Your Share Value:</span>
+            <span className="font-bold text-green-400">
+              {userShareValue > 0 ? (
+                <>
+                  {displayCurrency === 'USD' ? '$' : ''}{userShareValue.toFixed(2)} {displayCurrency !== 'USD' ? displayCurrency : ''}
+                </>
+              ) : (
+                displayCurrency === 'USD' ? '$0.00' : '0.00'
+              )}
+            </span>
+          </div>
         </div>
 
         <div className="flex gap-2">
@@ -233,197 +435,6 @@ export default function AssetsPage() {
     const tokenType = getTokenType(asset.metadata?.documents || '');
     return tokenType === 'UNIQUE';
   });
-
-  // Composant de rendu pour une carte d'asset
-  const renderAssetCard = (asset: any) => {
-    const tokenType = getTokenType(asset.metadata?.documents || '');
-    const paymentToken = getPaymentToken(asset.metadata?.documents || '');
-    const isDivisible = tokenType === 'DIVISIBLE';
-    const isUnique = tokenType === 'UNIQUE';
-
-    return (
-      <div key={asset.id.toString()} className="group overflow-hidden rounded-xl border border-gray-800 bg-gray-900/50 transition-all hover:border-purple-500/50 hover:shadow-lg hover:shadow-purple-500/20">
-        {/* Image */}
-        <div className="relative h-56 w-full overflow-hidden bg-gray-800">
-          {asset.imageUrl ? (
-            <img
-              src={asset.imageUrl}
-              alt={asset.name}
-              className="h-full w-full object-cover transition-transform group-hover:scale-105"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-                (e.target as HTMLImageElement).parentElement!.classList.add('flex', 'items-center', 'justify-center');
-              }}
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center">
-              <div className="text-center text-gray-600">
-                <svg className="mx-auto mb-2 h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                <p className="text-sm">No image</p>
-              </div>
-            </div>
-          )}
-          {/* Badge Status */}
-          <div className="absolute right-3 top-3">
-            <span className={`rounded-full px-3 py-1 text-xs font-semibold backdrop-blur-sm ${
-              asset.active
-                ? 'bg-green-500/90 text-white'
-                : 'bg-gray-500/90 text-white'
-            }`}>
-              {asset.active ? 'Active' : 'Inactive'}
-            </span>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="p-5">
-          <div className="mb-4">
-            <h3 className="mb-2 text-xl font-bold text-white">{asset.name}</h3>
-            
-            {/* Informations rapides */}
-            <div className="flex flex-wrap gap-2 text-xs">
-              <span className="rounded-full bg-purple-500/30 px-2 py-1 font-semibold text-purple-300">
-                {asset.symbol}
-              </span>
-              {asset.metadata && (
-                <>
-                  {asset.metadata.documents && (() => {
-                    const tokenType = getTokenType(asset.metadata.documents);
-                    return (
-                      <>
-                        {tokenType && (
-                          <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                            tokenType === 'DIVISIBLE' 
-                              ? 'bg-blue-500/20 text-blue-300' 
-                              : 'bg-yellow-500/20 text-yellow-300'
-                          }`}>
-                            {tokenType === 'DIVISIBLE' ? '🔹 Divisible' : '💎 Unique NFT'}
-                          </span>
-                        )}
-                      </>
-                    );
-                  })()}
-                  {asset.metadata.location && (
-                    <span className="rounded-full bg-blue-500/20 px-2 py-1 text-blue-300">
-                      📍 {asset.metadata.location}
-                    </span>
-                  )}
-                  {asset.metadata.surface > 0 && (
-                    <span className="rounded-full bg-green-500/20 px-2 py-1 text-green-300">
-                      {asset.metadata.surface.toString()} m²
-                    </span>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Affichage différent selon le type */}
-          {isDivisible ? (
-            // Fractional Properties (DIVISIBLE)
-            <div className="mb-4 space-y-2 border-t border-gray-800 pt-4 text-xs">
-              <div className="flex justify-between items-baseline">
-                <span className="text-gray-500">Your Ownership:</span>
-                <span className="font-mono font-semibold text-purple-300">
-                  {asset.userBalance !== undefined && asset.totalSupply !== undefined ? (
-                    <>
-                      {formatUnits(asset.userBalance, 18)} / {formatUnits(asset.totalSupply, 18)}
-                    </>
-                  ) : (
-                    '-- / --'
-                  )}
-                </span>
-              </div>
-              <div className="flex justify-between items-baseline">
-                <span className="text-gray-500">Token Price:</span>
-                <span className="font-semibold text-blue-400">
-                  {asset.metadata?.estimatedValue ? (
-                    <>
-                      ${Number(asset.metadata.estimatedValue).toLocaleString()}
-                      {paymentToken && (
-                        <span className="ml-1 text-xs text-gray-400">({paymentToken})</span>
-                      )}
-                    </>
-                  ) : (
-                    '$--'
-                  )}
-                </span>
-              </div>
-              <div className="flex justify-between items-baseline">
-                <span className="text-gray-500">Your Share Value:</span>
-                <span className="font-bold text-green-400">
-                  {asset.userBalance !== undefined && asset.metadata?.estimatedValue ? (
-                    `$${(Number(formatUnits(asset.userBalance, 18)) * Number(asset.metadata.estimatedValue)).toFixed(2)}`
-                  ) : (
-                    '$0.00'
-                  )}
-                </span>
-              </div>
-            </div>
-          ) : isUnique ? (
-            // Exclusive Properties (UNIQUE)
-            <div className="mb-4 space-y-2 border-t border-gray-800 pt-4 text-xs">
-              <div className="flex justify-between items-baseline">
-                <span className="text-gray-500">Asset Value:</span>
-                <span className="font-bold text-green-400">
-                  {asset.metadata?.estimatedValue ? (
-                    <>
-                      ${Number(asset.metadata.estimatedValue).toLocaleString()}
-                      {paymentToken && (
-                        <span className="ml-1 text-xs text-gray-400">({paymentToken})</span>
-                      )}
-                    </>
-                  ) : (
-                    '$--'
-                  )}
-                </span>
-              </div>
-              <div className="flex justify-between items-baseline">
-                <span className="text-gray-500">Ownership:</span>
-                <span className={`font-semibold ${
-                  asset.userBalance && asset.userBalance > BigInt(0) 
-                    ? 'text-green-400' 
-                    : 'text-gray-400'
-                }`}>
-                  {asset.userBalance && asset.userBalance > BigInt(0) ? '✓ Owned' : '✗ Not Owned'}
-                </span>
-              </div>
-            </div>
-          ) : (
-            // Fallback pour les anciens assets
-            <div className="mb-4 space-y-2 border-t border-gray-800 pt-4 text-xs">
-              <div className="flex justify-between items-baseline">
-                <span className="text-gray-500">Your Ownership:</span>
-                <span className="font-mono font-semibold text-purple-300">
-                  {asset.userBalance !== undefined && asset.totalSupply !== undefined ? (
-                    <>
-                      {formatUnits(asset.userBalance, 18)} / {formatUnits(asset.totalSupply, 18)}
-                    </>
-                  ) : (
-                    '-- / --'
-                  )}
-                </span>
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            <button 
-              onClick={() => setSelectedAsset(asset)}
-              className="flex-1 rounded-lg bg-purple-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-purple-700"
-            >
-              View Details
-            </button>
-            <button className="flex-1 rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700">
-              Trade
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="page-readable container mx-auto px-4 py-8">
@@ -498,7 +509,14 @@ export default function AssetsPage() {
               </div>
             ) : (
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {divisibleAssets.map(renderAssetCard)}
+                {divisibleAssets.map(asset => (
+                  <DivisibleAssetCard 
+                    key={asset.id.toString()} 
+                    asset={asset} 
+                    userAddress={userAddress as Address}
+                    onViewDetails={setSelectedAsset}
+                  />
+                ))}
               </div>
             )}
           </div>

@@ -10,6 +10,7 @@ export const ORACLE_ABI = [
     outputs: [
       { name: 'price', type: 'uint256' },
       { name: 'updatedAt', type: 'uint256' },
+      { name: 'currency', type: 'string' },
     ],
     stateMutability: 'view',
     type: 'function',
@@ -29,6 +30,7 @@ export const ORACLE_ABI = [
     inputs: [
       { name: 'assetId', type: 'uint256' },
       { name: 'price', type: 'uint256' },
+      { name: 'currency', type: 'string' },
     ],
     name: 'setPrice',
     outputs: [],
@@ -36,10 +38,35 @@ export const ORACLE_ABI = [
     type: 'function',
   },
   {
+    inputs: [],
+    name: 'ORACLE_ADMIN_ROLE',
+    outputs: [{ name: '', type: 'bytes32' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'DEFAULT_ADMIN_ROLE',
+    outputs: [{ name: '', type: 'bytes32' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: 'role', type: 'bytes32' },
+      { name: 'account', type: 'address' },
+    ],
+    name: 'hasRole',
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
     inputs: [
       { indexed: true, name: 'assetId', type: 'uint256' },
       { indexed: false, name: 'price', type: 'uint256' },
       { indexed: false, name: 'updatedAt', type: 'uint256' },
+      { indexed: false, name: 'currency', type: 'string' },
     ],
     name: 'PriceUpdated',
     type: 'event',
