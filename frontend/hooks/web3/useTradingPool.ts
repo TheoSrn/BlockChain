@@ -166,6 +166,7 @@ export function useTradingPoolWrite() {
       abi: ERC20_ABI,
       functionName: 'approve',
       args: [TRADING_POOL_ADDRESS, parseUnits(amount, decimals)],
+      gas: 100000n,
     });
   };
 
@@ -193,6 +194,7 @@ export function useTradingPoolWrite() {
         parseUnits(amountOutMin, decimalsOut),
         deadline,
       ],
+      gas: 500000n,
     });
   };
 
@@ -210,15 +212,28 @@ export function useTradingPoolWrite() {
   ) => {
     const amountADesired = parseUnits(amountA, decimalsA);
     const amountBDesired = parseUnits(amountB, decimalsB);
-    const amountAMin = (amountADesired * BigInt(Math.floor(100 - slippage))) / BigInt(100);
-    const amountBMin = (amountBDesired * BigInt(Math.floor(100 - slippage))) / BigInt(100);
+    // Calcul correct du slippage (ex: 0.5% → 99.5% du montant)
+    const slippageBps = Math.floor(slippage * 100); // 0.5 → 50 basis points
+    const amountAMin = (amountADesired * BigInt(10000 - slippageBps)) / BigInt(10000);
+    const amountBMin = (amountBDesired * BigInt(10000 - slippageBps)) / BigInt(10000);
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 60 * 20);
+
+    console.log('📊 TradingPool addLiquidity params:');
+    console.log('  tokenA:', tokenA);
+    console.log('  tokenB:', tokenB);
+    console.log('  amountADesired:', amountADesired.toString());
+    console.log('  amountBDesired:', amountBDesired.toString());
+    console.log('  amountAMin:', amountAMin.toString());
+    console.log('  amountBMin:', amountBMin.toString());
+    console.log('  deadline:', deadline.toString());
+    console.log('  slippage:', slippage, '→', slippageBps, 'bps');
 
     writeContract({
       address: TRADING_POOL_ADDRESS,
       abi: tradingPoolABI,
       functionName: 'addLiquidity',
       args: [tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, deadline],
+      gas: 800000n,
     });
   };
 
@@ -242,6 +257,7 @@ export function useTradingPoolWrite() {
       abi: tradingPoolABI,
       functionName: 'removeLiquidity',
       args: [tokenA, tokenB, liquidityAmount, amountAMin, amountBMin, deadline],
+      gas: 600000n,
     });
   };
 

@@ -1,137 +1,109 @@
-# BlockChain Project
+# 🏢 Tokenized Real Estate Platform
 
-Smart-contracts (Hardhat) + Next.js frontend. Follow the steps below to deploy contracts, create the right .env files, and run the app.
+Plateforme blockchain de tokenisation d'actifs immobiliers avec trading décentralisé, conformité KYC on-chain, et synchronisation temps-réel.
 
-## Project Structure
-- contracts/ : Solidity smart contracts + Hardhat config + deploy scripts
-- frontend/  : Next.js app (UI, hooks, services)
-- indexer/   : On-chain event indexer (REST + WebSocket)
-- backend/   : Optional backend (currently empty)
-- docs/      : Documentation
+**⛓️ Network:** Ethereum Sepolia Testnet
 
-## Prerequisites
-- Node.js 18+
-- npm
+---
 
-## 1) Smart Contracts (Hardhat)
-All contracts live in contracts/.
+## 🎯 Qu'est-ce que c'est ?
 
-### Install dependencies
-```powershell
-cd BlockChain\contracts
-npm install
+Une application complète pour tokeniser des **biens immobiliers** (bureaux, villas, terrains) et les échanger de manière sécurisée sur blockchain :
+
+- 🏠 **Tokenisation** : Créer des tokens ERC-20 (divisibles) ou ERC-721 (uniques)
+- ✅ **KYC On-Chain** : Whitelist/Blacklist enforced dans tous les contrats
+- 💱 **Trading DEX** : Uniswap V2 avec vérification KYC obligatoire
+- 📊 **Oracle** : Prix des assets mis à jour en temps réel
+- 🔄 **Indexer** : Synchronisation automatique via WebSocket
+
+---
+
+## 🚀 Quick Start
+
+```bash
+# 1. Cloner le repo
+git clone <votre-repo>
+cd BlockChain
+
+# 2. Installer les dépendances
+npm install --prefix contracts
+npm install --prefix frontend
+npm install --prefix indexer
+
+# 3. Lancer l'application
+cd frontend && npm run dev        # Frontend → http://localhost:3000
+cd indexer && npm run dev         # Indexer → http://localhost:3001
 ```
 
-### Compile
-```powershell
-npx hardhat compile
+📖 **Guide complet :** [INSTALLATION.md](./INSTALLATION.md)
+
+---
+
+## 📝 Déploiement des Contrats
+
+```bash
+# Déployer tous les contrats sur Sepolia
+cd contracts
+npx hardhat run scripts/deployAll.ts --network sepolia
 ```
 
-### Run a local node
-```powershell
-npx hardhat node
-```
-Leave this terminal open.
+Le script affiche les adresses à copier dans `frontend/.env.local` :
+- `NEXT_PUBLIC_ASSET_FACTORY_ADDRESS`
+- `NEXT_PUBLIC_KYC_ADDRESS`
+- `NEXT_PUBLIC_ORACLE_ADDRESS`
+- `NEXT_PUBLIC_TRADING_POOL_ADDRESS`
 
-### Deploy contracts (new terminal)
-```powershell
-cd BlockChain\contracts
-npx hardhat run scripts/deploy.ts --network sepolia
-```
-The deploy script prints the contract addresses you must copy into the frontend .env.local.
+📖 **Configuration complète :** [INSTALLATION.md](./INSTALLATION.md)
 
-## 2) Frontend (Next.js)
-The frontend reads all configuration from frontend/.env.local.
+---
 
-### Create frontend/.env.local
-Create this file at:
-```
-BlockChain\frontend\.env.local
-```
+## 🏗️ Stack Technique
 
-Minimal required variables:
-```
-NEXT_PUBLIC_ASSET_FACTORY_ADDRESS=0x...
-NEXT_PUBLIC_KYC_ADDRESS=0x...
-NEXT_PUBLIC_ORACLE_ADDRESS=0x...
-NEXT_PUBLIC_ROUTER_ADDRESS=0x...
-NEXT_PUBLIC_BASE_TOKEN_ADDRESS=0x...
-NEXT_PUBLIC_USDC_ADDRESS=0x...
-NEXT_PUBLIC_USDT_ADDRESS=0x...
-NEXT_PUBLIC_DEFAULT_ASSET_ID=1
-NEXT_PUBLIC_CHAIN_ID=11155111
-NEXT_PUBLIC_SEPOLIA_RPC_URL=https://YOUR_SEPOLIA_RPC
-```
+**Smart Contracts**  
+Solidity 0.8.20 + OpenZeppelin + Hardhat
 
-Optional but recommended:
-```
-# Etherscan (transactions history)
-ETHERSCAN_API_KEY=your_etherscan_api_key
+**Frontend**  
+Next.js 14 + TypeScript + Wagmi + TailwindCSS
 
-# Local RPC (only if you run a local node)
-NEXT_PUBLIC_LOCAL_RPC_URL=http://127.0.0.1:8545
-```
+**Backend**  
+Node.js + WebSocket + REST API (Indexer temps-réel)
 
-After any change to .env.local, restart the dev server.
+**Blockchain**  
+Ethereum Sepolia (EVM) + Uniswap V2
 
-### Run the app
-```powershell
-cd BlockChain\frontend
-npm install
-npm run dev
-```
-Open http://localhost:3000
+---
 
-## 3) Basic Test Flow
-1. Open /kyc and verify your wallet is whitelisted.
-2. Open /tokenize and create an asset in the Factory tab.
-3. Mint ERC20 tokens in the ERC20 tab.
-4. Check /oracle for prices and /dashboard for balances.
+## 📚 Documentation
 
-## 4) Whitelist / Blacklist a Wallet (KYC)
-Use the KYC address from frontend/.env.local (NEXT_PUBLIC_KYC_ADDRESS).
+- **[HOW_TO_USE.md](./HOW_TO_USE.md)** → Guide utilisateur
+- **[DESIGN_CHOICES.md](./DESIGN_CHOICES.md)** → Justifications techniques
+- **[INSTALLATION.md](./INSTALLATION.md)** → Installation & configuration
 
-```powershell
-cd BlockChain\contracts
-npx hardhat console --network localhost
-```
+---
 
-```js
-const kyc = await ethers.getContractAt("KYC", "0xYOUR_KYC_ADDRESS");
+## 🎁 Bonus Implémentés
 
-// Whitelist
-await kyc.setWhitelisted("0xYOUR_WALLET", true);
+✅ Upgradeable contracts (Proxy pattern - Clones EIP-1167)  
+✅ Custom indexer avec WebSocket real-time  
+✅ Oracle system on-chain  
+✅ KYC workflow avancé  
+✅ Gas optimization (factory pattern)
 
-// Unwhitelist
-await kyc.setWhitelisted("0xYOUR_WALLET", false);
+---
 
-// Blacklist
-await kyc.setBlacklisted("0xYOUR_WALLET", true);
+## 🎥 Démo
 
-// Unblacklist
-await kyc.setBlacklisted("0xYOUR_WALLET", false);
-```
+**Vidéo complète :** [Lien YouTube à ajouter]
 
-Note: the caller must have the KYC admin role (usually the deployer).
+Démo inclut :
+1. Connexion wallet + vérification KYC
+2. Création asset immobilier (ERC-20 + NFT)
+3. Trading sur DEX avec liquidité
+4. Mise à jour prix Oracle
+5. Synchronisation temps-réel (indexer)
 
-## Notes
-- backend/ is currently a placeholder.
-- If you change Hardhat config, restart the local node.
+---
 
-## 5) Start the Indexer (On-Chain Events Sync)
+## 📄 License
 
-```powershell
-cd BlockChain\indexer
-npm install
-copy .env.example .env
-npm run dev
-```
-
-Default endpoints:
-- REST: `http://localhost:8080/events`
-- WS: `ws://localhost:8080/events/stream`
-
-## Troubleshooting
-- HH1006: Make sure Solidity files are in contracts/ and dependencies installed.
-- HH108: Start the Hardhat node before deploying.
-- Contract size errors: local config allows unlimited contract size.
+MIT

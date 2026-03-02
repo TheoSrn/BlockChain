@@ -208,9 +208,9 @@ function UniqueAssetCardWithOwnership({
           >
             View Details
           </button>
-          <button className="flex-1 rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700">
+          <Link href="/trade" className="flex-1 rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700 text-center leading-[2.5rem]">
             Trade
-          </button>
+          </Link>
         </div>
       </div>
     </div>
@@ -382,9 +382,9 @@ function DivisibleAssetCard({
           >
             View Details
           </button>
-          <button className="flex-1 rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700">
+          <Link href="/trade" className="flex-1 rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700 text-center leading-[2.5rem]">
             Trade
-          </button>
+          </Link>
         </div>
       </div>
     </div>
@@ -752,9 +752,9 @@ export default function AssetsPage() {
 
               {/* Actions */}
               <div className="flex gap-4">
-                <button className="flex-1 rounded-lg bg-purple-600 py-3 font-semibold text-white transition-colors hover:bg-purple-700">
+                <Link href="/trade" className="flex-1 rounded-lg bg-purple-600 py-3 font-semibold text-white transition-colors hover:bg-purple-700 text-center">
                   Trade Now
-                </button>
+                </Link>
                 <a
                   href={`https://sepolia.etherscan.io/address/${selectedAsset.nft}`}
                   target="_blank"

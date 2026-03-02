@@ -918,6 +918,16 @@ function LiquidityTab({ canTrade, userAddress }: { canTrade: boolean; userAddres
   };
 
   const handleAddLiquidity = () => {
+    console.log('🔍 DEBUG - Add Liquidity called');
+    console.log('canTrade:', canTrade);
+    console.log('poolExists:', poolExists);
+    console.log('pairAddress:', pairAddress);
+    console.log('amountA:', amountA, 'decimalsA:', decimalsA);
+    console.log('amountB:', amountB, 'decimalsB:', decimalsB);
+    console.log('allowanceA:', allowanceA?.toString());
+    console.log('allowanceB:', allowanceB?.toString());
+    console.log('slippage:', slippage);
+
     if (!canTrade) {
       alert('❌ Trading Restricted: Only whitelisted users can add liquidity. Please complete KYC verification and wait for admin approval.');
       return;
@@ -951,6 +961,7 @@ function LiquidityTab({ canTrade, userAddress }: { canTrade: boolean; userAddres
       }
     }
 
+    console.log('✅ All checks passed, calling addLiquidity...');
     // Ajouter la liquidité via TradingPool (KYC enforced on-chain)
     addLiquidity(
       tokenAAddress,
